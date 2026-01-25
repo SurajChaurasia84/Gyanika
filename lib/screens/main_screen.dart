@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:iconsax/iconsax.dart';
 
-import 'screens/home_section.dart';
-import 'screens/explore_section.dart';
-import 'screens/quizes_section.dart';
-import 'screens/library_section.dart';
-import 'screens/chat_section.dart';
+import 'home_section.dart';
+import 'explore_section.dart';
+import 'quizes_section.dart';
+import 'library_section.dart';
+import 'chat_section.dart';
 
 class GyanikaApp extends StatefulWidget {
   const GyanikaApp({super.key});
@@ -60,7 +60,7 @@ class _GyanikaAppState extends State<GyanikaApp> {
             currentIndex: _currentIndex,
             onTap: (index) => setState(() => _currentIndex = index),
             type: BottomNavigationBarType.fixed,
-            showSelectedLabels: false,
+            showSelectedLabels: true,
             showUnselectedLabels: false,
             selectedItemColor: Colors.indigo,
             unselectedItemColor: Colors.grey,
@@ -69,31 +69,31 @@ class _GyanikaAppState extends State<GyanikaApp> {
                 icon: _currentIndex == 0
                     ? const Icon(Iconsax.home_15, size: 30)
                     : const Icon(Iconsax.home, size: 25),
-                label: '',
+                label: 'Home',
               ),
               BottomNavigationBarItem(
                 icon: _currentIndex == 1
                     ? const Icon(Iconsax.clipboard5, size: 30)
                     : const Icon(Iconsax.clipboard, size: 25),
-                label: '',
+                label: 'Explore',
               ),
               BottomNavigationBarItem(
                 icon: _currentIndex == 2
                     ? const Icon(Iconsax.cup5, size: 30)
                     : const Icon(Iconsax.cup, size: 25),
-                label: '',
+                label: 'Quizes',
               ),
               BottomNavigationBarItem(
                 icon: _currentIndex == 3
                     ? const Icon(Iconsax.layer5, size: 30)
                     : const Icon(Iconsax.layer, size: 25),
-                label: '',
+                label: 'Library',
               ),
               BottomNavigationBarItem(
                 icon: _currentIndex == 4
                     ? const Icon(Iconsax.message5, size: 30)
                     : const Icon(Iconsax.message, size: 25),
-                label: '',
+                label: 'Chats',
               ),
             ],
           ),
