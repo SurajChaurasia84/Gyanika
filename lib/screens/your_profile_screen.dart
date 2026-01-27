@@ -18,9 +18,7 @@ class YourProfileScreen extends StatelessWidget {
     final theme = Theme.of(context);
 
     if (user == null) {
-      return const Scaffold(
-        body: Center(child: Text("User not logged in")),
-      );
+      return const Scaffold(body: Center(child: Text("User not logged in")));
     }
 
     return Scaffold(
@@ -44,53 +42,51 @@ class YourProfileScreen extends StatelessWidget {
             children: [
               /// 👤 PROFILE HEADER
               InkWell(
-  borderRadius: BorderRadius.circular(12),
-  onTap: () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const MyProfileScreen(),
-      ),
-    );
-  },
-  child: Row(
-    children: [
-      CircleAvatar(
-        radius: 28,
-        backgroundColor: theme.colorScheme.primary,
-        child: Text(
-          name.isNotEmpty ? name[0].toUpperCase() : 'U',
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-      const SizedBox(width: 16),
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            name,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            email,
-            style: const TextStyle(
-              fontSize: 14,
-              color: Colors.grey,
-            ),
-          ),
-        ],
-      ),
-    ],
-  ),
-),
+                borderRadius: BorderRadius.circular(12),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const MyProfileScreen()),
+                  );
+                },
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 28,
+                      backgroundColor: theme.colorScheme.primary,
+                      child: Text(
+                        name.isNotEmpty ? name[0].toUpperCase() : 'U',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          email,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
 
               const SizedBox(height: 30),
 
@@ -146,10 +142,7 @@ class YourProfileScreen extends StatelessWidget {
       title: Text(title),
       trailing: const Icon(Icons.arrow_forward_ios, size: 16),
       onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => screen),
-        );
+        Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
       },
     );
   }

@@ -69,9 +69,8 @@ flutter:
   # the material Icons class.
   uses-material-design: true
   assets:
-    - assets/src/name.png
     - assets/src/icon.png
-    - assets/src/icon2.png
+    - assets/src/splash.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:
@@ -80,20 +79,20 @@ flutter:
 flutter_icons:
   android: true
   ios: true
-  image_path: "assets/src/icon2.png"
+  image_path: "assets/src/icon.png"
 
 flutter_native_splash:
   color: "#FFFFFF"
   color_dark: "#121212"
-  image: assets/src/icon.png
-  image_dark: assets/src/icon.png
+  image: assets/src/splash.png
+  image_dark: assets/src/splash.png
   android: true
   ios: true
   android_12:
-    image: assets/src/icon.png
+    image: assets/src/splash.png
     color: "#FFFFFF"
     color_dark: "#121212"
-    image_dark: assets/src/icon.png
+    image_dark: assets/src/splash.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
