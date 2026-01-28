@@ -15,7 +15,6 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
   final _education = TextEditingController();
   final _stream = TextEditingController();
   final _institute = TextEditingController();
-
   final _startYear = TextEditingController();
   final _endYear = TextEditingController();
 
@@ -29,7 +28,6 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
     _loadData();
   }
 
-  /// 🔄 LOAD DATA
   Future<void> _loadData() async {
     final doc =
         await FirebaseFirestore.instance.collection('users').doc(uid).get();
@@ -40,7 +38,6 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
     _stream.text = data['stream'] ?? '';
     _institute.text = data['institute'] ?? '';
 
-    /// duration split
     if (data['duration'] != null) {
       final parts = (data['duration'] as String).split('-');
       if (parts.length == 2) {
@@ -52,7 +49,6 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
     setState(() {});
   }
 
-  /// 💾 SAVE DATA
   Future<void> _saveEducation() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -93,7 +89,6 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
         title: const Text('Education details'),
       ),
 
-      /// SAVE BUTTON
       bottomNavigationBar: SafeArea(
         top: false,
         child: Padding(
@@ -120,33 +115,42 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              _input(context, _education, 'Education', required: true),
+              _labeledInput(
+                label: 'Education',
+                controller: _education,
+                required: true,
+              ),
               const SizedBox(height: 16),
 
-              _input(context, _stream, 'Stream / Branch'),
+              _labeledInput(
+                label: 'Stream / Branch',
+                controller: _stream,
+              ),
               const SizedBox(height: 16),
 
-              _input(context, _institute, 'School / College', required: true),
+              _labeledInput(
+                label: 'School / College',
+                controller: _institute,
+                required: true,
+              ),
               const SizedBox(height: 16),
 
-              /// YEARS (START - END)
+              /// YEARS
               Row(
                 children: [
                   Expanded(
-                    child: _input(
-                      context,
-                      _startYear,
-                      'Start year',
+                    child: _labeledInput(
+                      label: 'Start year',
+                      controller: _startYear,
                       keyboardType: TextInputType.number,
                       required: true,
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: _input(
-                      context,
-                      _endYear,
-                      'End year',
+                    child: _labeledInput(
+                      label: 'End year',
+                      controller: _endYear,
                       keyboardType: TextInputType.number,
                       required: true,
                     ),
@@ -160,31 +164,47 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
     );
   }
 
-  // ───────────── HELPERS ─────────────
+  // ───────── LABEL + INPUT ─────────
 
-  Widget _input(
-    BuildContext context,
-    TextEditingController controller,
-    String hint, {
-    bool required = false,
-    TextInputType keyboardType = TextInputType.text,
-  }) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      validator: required
-          ? (v) => v == null || v.isEmpty ? 'Required' : null
-          : null,
-      decoration: InputDecoration(
-        hintText: hint,
-        filled: true,
-        fillColor: Theme.of(context).colorScheme.surface,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+  Widget _labeledInput({
+  required String label,
+  required TextEditingController controller,
+  bool required = false,
+  TextInputType keyboardType = TextInputType.text,
+}) {
+  final theme = Theme.of(context);
+
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          color: theme.colorScheme.onSurface.withOpacity(.6),
         ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       ),
-    );
-  }
+      const SizedBox(height: 6),
+      TextFormField(
+        controller: controller,
+        keyboardType: keyboardType,
+        textCapitalization: TextCapitalization.words,
+        validator: required
+            ? (v) => v == null || v.isEmpty ? 'Required' : null
+            : null,
+        decoration: InputDecoration(
+          filled: true,
+          fillColor: theme.colorScheme.surface,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        ),
+      ),
+    ],
+  );
+}
+
 }
