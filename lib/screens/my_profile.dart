@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:gyanika/screens/personal_detail.dart';
 import 'package:iconsax/iconsax.dart';
+// import 'personal_detail.dart';
 
 class MyProfileScreen extends StatelessWidget {
   const MyProfileScreen({super.key});
@@ -37,7 +39,24 @@ class MyProfileScreen extends StatelessWidget {
                 /// PERSONAL DETAILS
                 _sectionTile(
                   title: 'PERSONAL DETAILS',
-                  onEdit: () {},
+                  onEdit: () {
+                    Navigator.push(
+                      context,
+                      PageRouteBuilder(
+                        transitionDuration: const Duration(milliseconds: 250),
+                        pageBuilder: (_, _, _) => const PersonalDetailScreen(),
+                        transitionsBuilder: (_, animation, _, child) {
+                          return FadeTransition(
+                            opacity: CurvedAnimation(
+                              parent: animation,
+                              curve: Curves.easeInOut,
+                            ),
+                            child: child,
+                          );
+                        },
+                      ),
+                    );
+                  },
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -47,23 +66,6 @@ class MyProfileScreen extends StatelessWidget {
                       _subText(data['location']),
                     ],
                   ),
-                  isDark: isDark,
-                ),
-
-                const SizedBox(height: 16),
-
-                /// CAREER OBJECTIVE
-                _sectionTile(
-                  title: 'CAREER OBJECTIVE',
-                  child: data['careerObjective'] == null
-                      ? _addButton(
-                          label: 'Add Career objective',
-                          onTap: () {},
-                        )
-                      : Text(
-                          data['careerObjective'],
-                          style: const TextStyle(fontSize: 15),
-                        ),
                   isDark: isDark,
                 ),
 
@@ -81,10 +83,7 @@ class MyProfileScreen extends StatelessWidget {
                           subtitle: data['institute'],
                           duration: data['duration'],
                         ),
-                      _addButton(
-                        label: 'Add education',
-                        onTap: () {},
-                      ),
+                      _addButton(label: 'Add education', onTap: () {}),
                     ],
                   ),
                   isDark: isDark,
@@ -147,10 +146,7 @@ class MyProfileScreen extends StatelessWidget {
     if (text == null || text.isEmpty) return const SizedBox();
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: Text(
-        text,
-        style: const TextStyle(fontSize: 16),
-      ),
+      child: Text(text, style: const TextStyle(fontSize: 16)),
     );
   }
 
@@ -176,10 +172,7 @@ class MyProfileScreen extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               label,
-              style: const TextStyle(
-                color: Colors.indigo,
-                fontSize: 15,
-              ),
+              style: const TextStyle(color: Colors.indigo, fontSize: 15),
             ),
           ],
         ),
@@ -187,11 +180,7 @@ class MyProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _educationTile({
-    String? title,
-    String? subtitle,
-    String? duration,
-  }) {
+  Widget _educationTile({String? title, String? subtitle, String? duration}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Column(
