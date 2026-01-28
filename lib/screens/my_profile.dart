@@ -115,7 +115,21 @@ class MyProfileScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if ((data['preferences'] ?? []).isNotEmpty)
+                      /// STREAM
+                      if (data['preferenceStream'] != null &&
+                          data['preferenceStream'].toString().isNotEmpty) ...[
+                        Text(
+                          data['preferenceStream'],
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                      ],
+
+                      /// PREFERENCES LIST
+                      if ((data['preferences'] ?? []).isNotEmpty) ...[
                         Wrap(
                           spacing: 8,
                           runSpacing: 8,
@@ -123,18 +137,27 @@ class MyProfileScreen extends StatelessWidget {
                             pref,
                           ) {
                             return Chip(
-                              label: Text(pref),
+                              label: Text(
+                                pref,
+                                style: const TextStyle(fontSize: 13),
+                              ),
                               backgroundColor: Theme.of(
                                 context,
                               ).colorScheme.primary.withOpacity(0.1),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
                             );
                           }).toList(),
                         ),
+                        const SizedBox(height: 10),
+                      ],
 
+                      /// ADD / EDIT BUTTON
                       _addButton(
                         label: (data['preferences'] ?? []).isEmpty
                             ? 'Add preferences'
-                            : 'Edit preferences',
+                            : 'Change preferences',
                         onTap: () {
                           Navigator.push(
                             context,
@@ -274,14 +297,6 @@ class MyProfileScreen extends StatelessWidget {
               style: const TextStyle(fontSize: 14, color: Colors.grey),
             ),
           ],
-
-          // if (duration != null && duration.isNotEmpty) ...[
-          //   const SizedBox(height: 4),
-          //   Text(
-          //     duration,
-          //     style: const TextStyle(fontSize: 13, color: Colors.grey),
-          //   ),
-          // ],
         ],
       ),
     );
