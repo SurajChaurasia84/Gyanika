@@ -86,64 +86,65 @@ class _HomeSectionState extends State<HomeSection> {
           children: [
             /// 👤 PROFILE ICON
             GestureDetector(
-  onTap: () {
-    Navigator.push(
-      context,
-      PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 250),
-        pageBuilder: (_, _, _) => const YourProfileScreen(),
-        transitionsBuilder: (_, animation, _, child) {
-          return FadeTransition(
-            opacity: CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeInOut,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  PageRouteBuilder(
+                    transitionDuration: const Duration(milliseconds: 250),
+                    pageBuilder: (_, _, _) => const YourProfileScreen(),
+                    transitionsBuilder: (_, animation, _, child) {
+                      return FadeTransition(
+                        opacity: CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeInOut,
+                        ),
+                        child: child,
+                      );
+                    },
+                  ),
+                );
+              },
+
+              child: StreamBuilder<DocumentSnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(uid)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  String letter = '?';
+
+                  if (snapshot.hasData && snapshot.data!.exists) {
+                    final data = snapshot.data!.data() as Map<String, dynamic>;
+                    final name = (data['name'] ?? '').toString().trim();
+
+                    if (name.isNotEmpty) {
+                      letter = name[0].toUpperCase();
+                    }
+                  }
+
+                  return Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: theme.colorScheme.primary.withOpacity(0.12),
+                    ),
+                    child: CircleAvatar(
+                      radius: 16,
+                      backgroundColor: theme.colorScheme.primary.withOpacity(
+                        0.15,
+                      ),
+                      child: Text(
+                        letter,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
             ),
-            child: child,
-          );
-        },
-      ),
-    );
-  },
-
-  child: StreamBuilder<DocumentSnapshot>(
-    stream: FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .snapshots(),
-    builder: (context, snapshot) {
-      String letter = '?';
-
-      if (snapshot.hasData && snapshot.data!.exists) {
-        final data = snapshot.data!.data() as Map<String, dynamic>;
-        final name = (data['name'] ?? '').toString().trim();
-
-        if (name.isNotEmpty) {
-          letter = name[0].toUpperCase();
-        }
-      }
-
-      return Container(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: theme.colorScheme.primary.withOpacity(0.12),
-        ),
-        child: CircleAvatar(
-          radius: 16,
-          backgroundColor: theme.colorScheme.primary.withOpacity(0.15),
-          child: Text(
-            letter,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: theme.colorScheme.primary,
-            ),
-          ),
-        ),
-      );
-    },
-  ),
-),
-
 
             const SizedBox(width: 10),
 
