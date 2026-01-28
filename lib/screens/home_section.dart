@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:gyanika/screens/preference_screen.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import 'your_profile_screen.dart';
 import 'course_detail_screen.dart';
@@ -14,16 +16,18 @@ class HomeSection extends StatefulWidget {
 }
 
 class _HomeSectionState extends State<HomeSection> {
+  final String uid = FirebaseAuth.instance.currentUser!.uid;
+
   int streak = 1;
 
   Stream<QuerySnapshot> recommendedCoursesStream() {
-  return FirebaseFirestore.instance
-      .collection('courses')
-      .where('published', isEqualTo: true)
-      .orderBy('createdAt', descending: true)
-      .limit(6)
-      .snapshots();
-}
+    return FirebaseFirestore.instance
+        .collection('courses')
+        .where('published', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(6)
+        .snapshots();
+  }
 
   @override
   void initState() {
@@ -82,96 +86,149 @@ class _HomeSectionState extends State<HomeSection> {
           children: [
             /// 👤 PROFILE ICON
             GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  PageRouteBuilder(
-                    transitionDuration: const Duration(milliseconds: 250),
-                    pageBuilder: (_, _, _) =>
-                        const YourProfileScreen(),
-                    transitionsBuilder: (_, animation, _, child) {
-                      return FadeTransition(
-                        opacity: CurvedAnimation(
-                          parent: animation,
-                          curve: Curves.easeInOut,
-                        ),
-                        child: child,
-                      );
-                    },
-                  ),
-                );
-              },
-
-              child: Container(
-                // padding: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: theme.colorScheme.primary.withOpacity(0.12),
-                ),
-                child: CircleAvatar(
-                  radius: 16,
-                  backgroundColor: theme.colorScheme.primary.withOpacity(0.15),
-                  child: Icon(
-                    Iconsax.user,
-                    size: 20,
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-              ),
+  onTap: () {
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 250),
+        pageBuilder: (_, _, _) => const YourProfileScreen(),
+        transitionsBuilder: (_, animation, _, child) {
+          return FadeTransition(
+            opacity: CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeInOut,
             ),
+            child: child,
+          );
+        },
+      ),
+    );
+  },
+
+  child: StreamBuilder<DocumentSnapshot>(
+    stream: FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .snapshots(),
+    builder: (context, snapshot) {
+      String letter = '?';
+
+      if (snapshot.hasData && snapshot.data!.exists) {
+        final data = snapshot.data!.data() as Map<String, dynamic>;
+        final name = (data['name'] ?? '').toString().trim();
+
+        if (name.isNotEmpty) {
+          letter = name[0].toUpperCase();
+        }
+      }
+
+      return Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: theme.colorScheme.primary.withOpacity(0.12),
+        ),
+        child: CircleAvatar(
+          radius: 16,
+          backgroundColor: theme.colorScheme.primary.withOpacity(0.15),
+          child: Text(
+            letter,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.primary,
+            ),
+          ),
+        ),
+      );
+    },
+  ),
+),
+
 
             const SizedBox(width: 10),
 
-            /// STREAM SELECTOR
-            GestureDetector(
-              onTap: () {},
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: theme.dividerColor),
-                ),
-                child: Row(
-                  children: [
-                    Text(
-                      'SSC',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: theme.colorScheme.onSurface,
+            /// STREAM SELECTOR (Firestore Connected)
+            StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(uid)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                String streamText = 'Select Stream';
+
+                if (snapshot.hasData && snapshot.data!.data() != null) {
+                  final data = snapshot.data!.data() as Map<String, dynamic>;
+                  if (data['preferenceStream'] != null &&
+                      data['preferenceStream'].toString().isNotEmpty) {
+                    streamText = data['preferenceStream'];
+                  }
+                }
+
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      PageRouteBuilder(
+                        transitionDuration: const Duration(milliseconds: 250),
+                        pageBuilder: (_, _, _) => const PreferenceScreen(),
+                        transitionsBuilder: (_, animation, _, child) {
+                          return FadeTransition(
+                            opacity: CurvedAnimation(
+                              parent: animation,
+                              curve: Curves.easeInOut,
+                            ),
+                            child: child,
+                          );
+                        },
                       ),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
                     ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Iconsax.arrow_down_1,
-                      size: 16,
-                      color: theme.hintColor,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: theme.dividerColor),
                     ),
-                  ],
-                ),
-              ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          streamText,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(
+                          Iconsax.arrow_down_1,
+                          size: 16,
+                          color: theme.hintColor,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
 
             const Spacer(),
 
             /// 🔥 DAILY STREAK
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(14),
                 color: Colors.orange.withOpacity(isDark ? 0.15 : 0.1),
-                border: Border.all(
-                  color: Colors.orange.withOpacity(0.5),
-                ),
+                border: Border.all(color: Colors.orange.withOpacity(0.5)),
               ),
               child: Row(
                 children: [
-                  const Icon(Iconsax.star5,
-                      size: 18, color: Colors.orange),
+                  const Icon(Iconsax.star5, size: 18, color: Colors.orange),
                   const SizedBox(width: 4),
                   Text(
                     '$streak',
@@ -293,8 +350,7 @@ class _HomeSectionState extends State<HomeSection> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Iconsax.video,
-                    size: 28, color: theme.colorScheme.primary),
+                Icon(Iconsax.video, size: 28, color: theme.colorScheme.primary),
                 const Spacer(),
                 Text(
                   'Flutter Basics',
@@ -304,10 +360,7 @@ class _HomeSectionState extends State<HomeSection> {
                     color: theme.colorScheme.onSurface,
                   ),
                 ),
-                Text(
-                  '12 lessons',
-                  style: TextStyle(color: theme.hintColor),
-                ),
+                Text('12 lessons', style: TextStyle(color: theme.hintColor)),
               ],
             ),
           );
@@ -317,121 +370,117 @@ class _HomeSectionState extends State<HomeSection> {
   }
 
   Widget _gridCards(ThemeData theme) {
-  return StreamBuilder<QuerySnapshot>(
-    stream: recommendedCoursesStream(),
-    builder: (context, snapshot) {
-      if (snapshot.connectionState == ConnectionState.waiting) {
-        return const Center(child: CircularProgressIndicator());
-      }
+    return StreamBuilder<QuerySnapshot>(
+      stream: recommendedCoursesStream(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-        return const Center(child: Text("No courses found"));
-      }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(child: Text("No courses found"));
+        }
 
-      final courses = snapshot.data!.docs;
+        final courses = snapshot.data!.docs;
 
-      return GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: courses.length,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          mainAxisSpacing: 14,
-          crossAxisSpacing: 14,
-          childAspectRatio: 0.9,
-        ),
-        itemBuilder: (context, index) {
-          final course = courses[index];
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: courses.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: 14,
+            crossAxisSpacing: 14,
+            childAspectRatio: 0.9,
+          ),
+          itemBuilder: (context, index) {
+            final course = courses[index];
 
-          return GestureDetector(
-            onTap: () {
-  final courseData = courses[index].data() as Map<String, dynamic>;
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => CourseDetailScreen(courseData: courseData),
-    ),
-  );
-},
-
-            child: Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                color: theme.colorScheme.surface,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  /// STREAM
-                  Text(
-                    course['stream'],
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: theme.colorScheme.primary,
-                      fontWeight: FontWeight.w500,
-                    ),
+            return GestureDetector(
+              onTap: () {
+                final courseData =
+                    courses[index].data() as Map<String, dynamic>;
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CourseDetailScreen(courseData: courseData),
                   ),
+                );
+              },
 
-                  const SizedBox(height: 8),
-
-                  /// COURSE NAME
-                  Text(
-                    course['courseName'],
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: theme.colorScheme.onSurface,
-                    ),
-                  ),
-
-                  const SizedBox(height: 6),
-
-                  /// SUBTITLE
-                  Text(
-                    course['subtitle'],
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: theme.hintColor,
-                    ),
-                  ),
-
-                  const Spacer(),
-
-                  /// LEVEL BADGE
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      color:
-                          theme.colorScheme.primary.withOpacity(0.12),
-                    ),
-                    child: Text(
-                      course['level'],
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  color: theme.colorScheme.surface,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    /// STREAM
+                    Text(
+                      course['stream'],
                       style: TextStyle(
                         fontSize: 12,
                         color: theme.colorScheme.primary,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      );
-    },
-  );
-}
 
+                    const SizedBox(height: 8),
+
+                    /// COURSE NAME
+                    Text(
+                      course['courseName'],
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+
+                    const SizedBox(height: 6),
+
+                    /// SUBTITLE
+                    Text(
+                      course['subtitle'],
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 13, color: theme.hintColor),
+                    ),
+
+                    const Spacer(),
+
+                    /// LEVEL BADGE
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        color: theme.colorScheme.primary.withOpacity(0.12),
+                      ),
+                      child: Text(
+                        course['level'],
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
 }
 
 class _QuickAction extends StatelessWidget {
@@ -453,16 +502,12 @@ class _QuickAction extends StatelessWidget {
             color: theme.colorScheme.primary.withOpacity(0.12),
             borderRadius: BorderRadius.circular(16),
           ),
-          child: Icon(icon,
-              color: theme.colorScheme.primary, size: 26),
+          child: Icon(icon, color: theme.colorScheme.primary, size: 26),
         ),
         const SizedBox(height: 8),
         Text(
           label,
-          style: TextStyle(
-            fontSize: 13,
-            color: theme.colorScheme.onSurface,
-          ),
+          style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurface),
         ),
       ],
     );
