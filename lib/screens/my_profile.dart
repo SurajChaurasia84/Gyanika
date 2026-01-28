@@ -211,7 +211,7 @@ class MyProfileScreen extends StatelessWidget {
               const Spacer(),
               if (onEdit != null)
                 IconButton(
-                  icon: const Icon(Iconsax.edit, size: 18),
+                  icon: const Icon(Icons.edit, size: 18),
                   onPressed: onEdit,
                 ),
             ],
