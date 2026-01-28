@@ -250,7 +250,7 @@ class _PreferenceScreenState extends State<PreferenceScreen> {
               ),
             ],
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
 
             /// 🔹 SELECT STREAM (SINGLE)
             Text(
@@ -281,23 +281,6 @@ class _PreferenceScreenState extends State<PreferenceScreen> {
 
             const SizedBox(height: 10),
 
-            /// ✅ SELECTED
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: selected.map((item) {
-                return Chip(
-                  label: Text(item),
-                  backgroundColor: primary,
-                  labelStyle: const TextStyle(color: Colors.white),
-                  deleteIcon: const Icon(Icons.close, color: Colors.white),
-                  onDeleted: () => setState(() => selected.remove(item)),
-                );
-              }).toList(),
-            ),
-
-            const SizedBox(height: 10),
-
             /// ⭐ POPULAR (STREAM BASED)
             if (popular.isNotEmpty) ...[
               Text(
@@ -307,7 +290,24 @@ class _PreferenceScreenState extends State<PreferenceScreen> {
                   color: theme.colorScheme.onSurface.withOpacity(.6),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
+
+              /// ✅ SELECTED
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: selected.map((item) {
+                  return Chip(
+                    label: Text(item),
+                    backgroundColor: primary,
+                    labelStyle: const TextStyle(color: Colors.white),
+                    deleteIcon: const Icon(Icons.close, color: Colors.white),
+                    onDeleted: () => setState(() => selected.remove(item)),
+                  );
+                }).toList(),
+              ),
+
+              const SizedBox(height: 4),
               Wrap(
                 spacing: 10,
                 runSpacing: 10,
