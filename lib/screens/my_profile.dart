@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:gyanika/screens/personal_detail.dart';
 import 'package:iconsax/iconsax.dart';
 import 'education_detail.dart';
+import 'preference_screen.dart';
 
 class MyProfileScreen extends StatelessWidget {
   const MyProfileScreen({super.key});
@@ -98,6 +99,47 @@ class MyProfileScreen extends StatelessWidget {
                             context,
                             MaterialPageRoute(
                               builder: (_) => const EducationDetailScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                  isDark: isDark,
+                ),
+                const SizedBox(height: 16),
+
+                /// PREFERENCES
+                _sectionTile(
+                  title: 'PREFERENCES',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if ((data['preferences'] ?? []).isNotEmpty)
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: List<String>.from(data['preferences']).map((
+                            pref,
+                          ) {
+                            return Chip(
+                              label: Text(pref),
+                              backgroundColor: Theme.of(
+                                context,
+                              ).colorScheme.primary.withOpacity(0.1),
+                            );
+                          }).toList(),
+                        ),
+
+                      _addButton(
+                        label: (data['preferences'] ?? []).isEmpty
+                            ? 'Add preferences'
+                            : 'Edit preferences',
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const PreferenceScreen(),
                             ),
                           );
                         },
