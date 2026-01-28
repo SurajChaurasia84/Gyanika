@@ -13,28 +13,132 @@ class PreferenceScreen extends StatefulWidget {
 class _PreferenceScreenState extends State<PreferenceScreen> {
   final uid = FirebaseAuth.instance.currentUser!.uid;
 
-  /// SEARCH
   final searchCtrl = TextEditingController();
 
-  /// USER SELECTED
   List<String> selected = [];
 
-  /// POPULAR LIST
-  final List<String> popularPreferences = [
-    'SSC',
-    'UPSC',
-    'Science',
-    'Math',
-    'High School',
-    'Intermediate',
-    'Technology',
-    'Programming',
-    'DSA',
-    'Data Science',
-    'Teaching',
-    'Software Development',
-    'Web Development',
-  ];
+  String? selectedStream;
+
+  final Map<String, List<String>> streamPreferences = {
+    'LKG/UKG': ['ABCD', 'abcd', '0-9'],
+    'Class 1-5': [
+      'Hindi',
+      'English',
+      'Mathematics',
+      'Science',
+      'Environmental Studies',
+      'General Knowledge',
+      'Moral Science',
+      'Electrical',
+    ],
+    'Class 6-8': [
+      'Hindi',
+      'English',
+      'Mathematics',
+      'Science',
+      'Physics',
+      'Chemistry',
+      'Biology',
+      'Social Science',
+      'History',
+      'Geography',
+      'Civics (Political Science)',
+    ],
+    'Class 9-10th': [
+      'Hindi',
+      'English',
+      'Mathematics',
+      'Science',
+      'Physics',
+      'Chemistry',
+      'Biology',
+      'Social Science',
+    ],
+    'Class 11-12th': [
+      'Hindi',
+      'English',
+      'Mathematics',
+      'Physics',
+      'Chemistry',
+      'Biology',
+      'Accountancy',
+      'Business Studies',
+      'Economics',
+      'History',
+      'Political Science',
+      'Geography',
+    ],
+    'JEE': [
+      'Linear Algebra',
+      'Calculus',
+      'Coordinate Geometry',
+      'Trigonometry',
+      'Vectors & 3D Geometry',
+      'Mechanics',
+      'Thermodynamics',
+      'Electricity & Magnetism',
+      'Optics',
+      'Modern Physics',
+      'Physical Chemistry',
+      'Organic Chemistry',
+      'Inorganic Chemistry',
+    ],
+    'NEET': [
+      'Botany',
+      'Zoology',
+      'Mechanics',
+      'Thermodynamics',
+      'Electricity & Magnetism',
+      'Optics',
+      'Modern Physics',
+      'Physical Chemistry',
+      'Organic Chemistry',
+      'Inorganic Chemistry',
+    ],
+    'CUET': [
+      'English',
+      'Hindi',
+      'Mathematics',
+      'Physics',
+      'Chemistry',
+      'Biology',
+      'Accountancy',
+      'Business Studies',
+      'Economics',
+      'History',
+      'Political Science',
+      'Geography',
+      'Sociology',
+      'Psychology',
+      'Computer Science',
+      'General Knowledge',
+      'Current Affairs',
+      'Logical Reasoning',
+      'Quantitative Aptitude',
+    ],
+    'College': ['B.Tech', 'B.E', 'B.Sc', 'BCA', 'B.Com', 'BBA', 'BA'],
+    'GATE': [
+      'General Aptitude',
+      'Engineering Mathematics',
+      'Data Structures & Algorithms',
+      'Operating Systems',
+      'Database Management Systems',
+      'Computer Networks',
+      'Theory of Computation',
+      'Compiler Design',
+      'Computer Organization & Architecture',
+      'Digital Logic',
+    ],
+    'SSC': [
+      'General Intelligence & Reasoning',
+      'Quantitative Aptitude (Mathematics)',
+      'General Awareness',
+      'English Comprehension',
+    ],
+  };
+
+  List<String> get allOptions =>
+      streamPreferences.values.expand((e) => e).toList();
 
   @override
   void initState() {
@@ -43,11 +147,14 @@ class _PreferenceScreenState extends State<PreferenceScreen> {
   }
 
   Future<void> _loadPreferences() async {
-    final doc =
-        await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .get();
     final data = doc.data();
-    if (data != null && data['preferences'] != null) {
-      selected = List<String>.from(data['preferences']);
+    if (data != null) {
+      selected = List<String>.from(data['preferences'] ?? []);
+      selectedStream = data['preferenceStream'];
       setState(() {});
     }
   }
@@ -55,6 +162,7 @@ class _PreferenceScreenState extends State<PreferenceScreen> {
   Future<void> _savePreferences() async {
     await FirebaseFirestore.instance.collection('users').doc(uid).set({
       'preferences': selected,
+      'preferenceStream': selectedStream,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
 
@@ -66,6 +174,20 @@ class _PreferenceScreenState extends State<PreferenceScreen> {
     final theme = Theme.of(context);
     final primary = theme.colorScheme.primary;
 
+    final List<String> filteredSuggestions = searchCtrl.text.isEmpty
+        ? []
+        : allOptions
+              .where(
+                (e) =>
+                    e.toLowerCase().contains(searchCtrl.text.toLowerCase()) &&
+                    !selected.contains(e),
+              )
+              .toList();
+
+    final List<String> popular = selectedStream == null
+        ? []
+        : streamPreferences[selectedStream]!;
+
     return Scaffold(
       appBar: AppBar(
         leading: const BackButton(),
@@ -73,14 +195,10 @@ class _PreferenceScreenState extends State<PreferenceScreen> {
       ),
 
       bottomNavigationBar: SafeArea(
-        top: false,
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: ElevatedButton(
             onPressed: _savePreferences,
-            style: ElevatedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 50),
-            ),
             child: const Text('Save'),
           ),
         ),
@@ -90,19 +208,11 @@ class _PreferenceScreenState extends State<PreferenceScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            /// TITLE
-            // Text(
-            //   'Your preferences',
-            //   style: theme.textTheme.headlineSmall
-            //       ?.copyWith(fontWeight: FontWeight.bold),
-            // ),
-            // const SizedBox(height: 12),
-
-            /// SEARCH
+            /// 🔍 SEARCH
             TextField(
               controller: searchCtrl,
               decoration: InputDecoration(
-                hintText: 'Areas you want to work in or learn about',
+                hintText: 'Search interests',
                 prefixIcon: const Icon(Iconsax.search_normal),
                 filled: true,
                 fillColor: theme.colorScheme.surface,
@@ -111,6 +221,7 @@ class _PreferenceScreenState extends State<PreferenceScreen> {
                   borderSide: BorderSide.none,
                 ),
               ),
+              onChanged: (_) => setState(() {}),
               onSubmitted: (value) {
                 if (value.isEmpty) return;
                 if (!selected.contains(value)) {
@@ -120,9 +231,57 @@ class _PreferenceScreenState extends State<PreferenceScreen> {
               },
             ),
 
+            /// 🔎 SUGGESTIONS
+            if (filteredSuggestions.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: filteredSuggestions.map((s) {
+                  return ActionChip(
+                    label: Text(s),
+                    onPressed: () {
+                      setState(() {
+                        selected.add(s);
+                        searchCtrl.clear();
+                      });
+                    },
+                  );
+                }).toList(),
+              ),
+            ],
+
             const SizedBox(height: 16),
 
-            /// SELECTED CHIPS
+            /// 🔹 SELECT STREAM (SINGLE)
+            Text(
+              'Select stream',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w500,
+                color: theme.colorScheme.onSurface.withOpacity(.6),
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            Wrap(
+              spacing: 10,
+              children: streamPreferences.keys.map((stream) {
+                final isSelected = stream == selectedStream;
+                return ChoiceChip(
+                  label: Text(stream),
+                  selected: isSelected,
+                  onSelected: (_) {
+                    setState(() {
+                      selectedStream = stream;
+                      selected.clear();
+                    });
+                  },
+                );
+              }).toList(),
+            ),
+
+            const SizedBox(height: 10),
+
+            /// ✅ SELECTED
             Wrap(
               spacing: 10,
               runSpacing: 10,
@@ -132,47 +291,37 @@ class _PreferenceScreenState extends State<PreferenceScreen> {
                   backgroundColor: primary,
                   labelStyle: const TextStyle(color: Colors.white),
                   deleteIcon: const Icon(Icons.close, color: Colors.white),
-                  onDeleted: () =>
-                      setState(() => selected.remove(item)),
+                  onDeleted: () => setState(() => selected.remove(item)),
                 );
               }).toList(),
             ),
 
-            const SizedBox(height: 28),
+            const SizedBox(height: 10),
 
-            /// POPULAR
-            Text(
-              'Popular career interests',
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 12),
-
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: popularPreferences.map((pref) {
-                final isAdded = selected.contains(pref);
-
-                return ActionChip(
-                  label: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(pref),
-                      const SizedBox(width: 4),
-                      Icon(
-                        isAdded ? Iconsax.tick_circle : Icons.add,
-                        size: 16,
-                      ),
-                    ],
-                  ),
-                  backgroundColor: theme.colorScheme.surface,
-                  onPressed: isAdded
-                      ? null
-                      : () => setState(() => selected.add(pref)),
-                );
-              }).toList(),
-            ),
+            /// ⭐ POPULAR (STREAM BASED)
+            if (popular.isNotEmpty) ...[
+              Text(
+                'Related interests',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w500,
+                  color: theme.colorScheme.onSurface.withOpacity(.6),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: popular.map((pref) {
+                  final added = selected.contains(pref);
+                  return ActionChip(
+                    label: Text(pref),
+                    onPressed: added
+                        ? null
+                        : () => setState(() => selected.add(pref)),
+                  );
+                }).toList(),
+              ),
+            ],
           ],
         ),
       ),
