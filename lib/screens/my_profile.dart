@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:gyanika/screens/personal_detail.dart';
 import 'package:iconsax/iconsax.dart';
-// import 'personal_detail.dart';
+import 'education_detail.dart';
 
 class MyProfileScreen extends StatelessWidget {
   const MyProfileScreen({super.key});
@@ -60,7 +60,11 @@ class MyProfileScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _normalText(data['name']),
+                      _normalText(
+                        [data['name'], data['gender']]
+                            .where((e) => e != null && e.toString().isNotEmpty)
+                            .join(' • '),
+                      ),
                       _subText(data['email']),
                       _subText(data['phone']),
                       _subText(data['location']),
@@ -79,11 +83,25 @@ class MyProfileScreen extends StatelessWidget {
                     children: [
                       if (data['education'] != null)
                         _educationTile(
-                          title: data['education'],
-                          subtitle: data['institute'],
+                          education: data['education'],
+                          stream: data['stream'],
+                          institute: data['institute'],
                           duration: data['duration'],
                         ),
-                      _addButton(label: 'Add education', onTap: () {}),
+
+                      _addButton(
+                        label: data['education'] == null
+                            ? 'Add education'
+                            : 'Edit education',
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const EducationDetailScreen(),
+                            ),
+                          );
+                        },
+                      ),
                     ],
                   ),
                   isDark: isDark,
@@ -180,21 +198,48 @@ class MyProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _educationTile({String? title, String? subtitle, String? duration}) {
+  Widget _educationTile({
+    String? education,
+    String? stream,
+    String? institute,
+    String? duration,
+  }) {
+    if (education == null || education.isEmpty) return const SizedBox();
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          /// Degree / Course
           Text(
-            '$title ${duration != null ? "($duration)" : ""}',
+            '$education ${duration != null ? "($duration)" : ""}',
             style: const TextStyle(fontSize: 15),
           ),
-          const SizedBox(height: 4),
-          Text(
-            subtitle ?? '',
-            style: const TextStyle(fontSize: 14, color: Colors.grey),
-          ),
+
+          if (stream != null && stream.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              stream,
+              style: const TextStyle(fontSize: 14, color: Colors.grey),
+            ),
+          ],
+
+          if (institute != null && institute.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              institute,
+              style: const TextStyle(fontSize: 14, color: Colors.grey),
+            ),
+          ],
+
+          // if (duration != null && duration.isNotEmpty) ...[
+          //   const SizedBox(height: 4),
+          //   Text(
+          //     duration,
+          //     style: const TextStyle(fontSize: 13, color: Colors.grey),
+          //   ),
+          // ],
         ],
       ),
     );
