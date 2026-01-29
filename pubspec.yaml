@@ -71,6 +71,23 @@ flutter:
   assets:
     - assets/src/icon.png
     - assets/src/splash.png
+    - assets/src/physics.png
+    - assets/src/maths.png
+    - assets/src/function.png
+    - assets/src/123.png
+    - assets/src/alphabet.png
+    - assets/src/biology.png
+    - assets/src/botany.png
+    - assets/src/chemistry.png
+    - assets/src/civil.png
+    - assets/src/cse.png
+    - assets/src/english.png
+    - assets/src/evs.png
+    - assets/src/gk.png
+    - assets/src/hindi.png
+    - assets/src/me.png
+    - assets/src/moral.png
+    - assets/src/science.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:
