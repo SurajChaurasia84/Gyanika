@@ -75,7 +75,7 @@ class _LoginScreenState extends State<LoginScreen> {
               // ✅ IMAGE (NO Expanded!)
               SizedBox(
                 height: 200,
-                child: Image.asset('assets/src/login.png', fit: BoxFit.contain),
+                child: Image.asset('assets/src/icon.png', fit: BoxFit.contain),
               ),
 
               const SizedBox(height: 60),

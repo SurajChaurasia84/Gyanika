@@ -2,8 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-
-import '../main_screen.dart'; // ✅ your MainScreen
+import 'username_setup.dart';
+// import '../main_screen.dart'; // ✅ your MainScreen
 
 class EmailVerificationScreen extends StatefulWidget {
   final User user;
@@ -45,7 +45,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
         /// ✅ Redirect to main screen
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (_) => const MainScreen()),
+          MaterialPageRoute(builder: (_) => const CreateUsernameScreen()),
           (route) => false,
         );
       }

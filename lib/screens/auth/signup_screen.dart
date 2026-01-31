@@ -93,7 +93,7 @@ class _GyanikaSignupScreenState extends State<GyanikaSignupScreen> {
               SizedBox(
                 height: 200,
                 child: Image.asset(
-                  'assets/src/signup.png',
+                  'assets/src/icon.png',
                   fit: BoxFit.contain,
                 ),
               ),
