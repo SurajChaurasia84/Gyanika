@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'subject_feed_screen.dart';
 
 class ExploreSection extends StatefulWidget {
   const ExploreSection({super.key});
@@ -42,8 +43,8 @@ class _ExploreSectionState extends State<ExploreSection> {
     ],
     'JEE': ['Mathematics', 'Physics', 'Chemistry'],
     'NEET': ['Botany', 'Zoology', 'Physics', 'Chemistry'],
-    'CUET': ['English', 'Hindi', 'Mathematics', 'Physics', 'Chemistry'],
-    'College': ['B.Tech', 'B.E', 'B.Sc', 'BCA', 'B.Com', 'BBA', 'BA'],
+    'CUET': ['Language', 'Mathematics', 'Physics', 'Chemistry'],
+    'College': ['B.Tech', 'B.Sc', 'BCA', 'BA'],
     'GATE': [
       'Computer Science & IT',
       'Mechanical Engineering',
@@ -52,8 +53,8 @@ class _ExploreSectionState extends State<ExploreSection> {
       'Civil Engineering',
     ],
     'SSC': [
-      'General Intelligence & Reasoning',
-      'Quantitative Aptitude (Mathematics)',
+      'Reasoning',
+      'Quantitative Aptitude',
       'General Awareness',
       'English Comprehension',
     ],
@@ -178,7 +179,8 @@ class _ExploreSectionState extends State<ExploreSection> {
                 crossAxisSpacing: 12,
                 childAspectRatio: 1.9,
               ),
-              itemBuilder: (_, i) => _SubjectCard(title: visible[i]),
+              itemBuilder: (_, i) =>
+                  _SubjectCard(title: visible[i], stream: entry.key),
             ),
             if (entry.key != data.keys.last) const SizedBox(height: 12),
           ],
@@ -259,37 +261,28 @@ final Map<String, SubjectConfig> subjectConfigs = {
   // Social Science
   'Social Science': SubjectConfig(
     color: Color(0xFF7E57C2),
-    image: 'assets/src/social.png',
-  ),
-  'History': SubjectConfig(
-    color: Color(0xFFD84315),
-    image: 'assets/src/history.png',
-  ),
-  'Geography': SubjectConfig(
-    color: Color(0xFF4DB6AC),
-    image: 'assets/src/geography.png',
-  ),
-  'Civics (Political Science)': SubjectConfig(
-    color: Color(0xFF5C6BC0),
-    image: 'assets/src/civics.png',
-  ),
-  'Political Science': SubjectConfig(
-    color: Color(0xFF5C6BC0),
-    image: 'assets/src/political.png',
+    image: 'assets/src/evs.png',
   ),
 
-  // Commerce
-  'Accountancy': SubjectConfig(
+  'B.Tech': SubjectConfig(
+    color: Color(0xFFEC407A),
+    image: 'assets/src/certificate.png',
+  ),
+  'B.Sc': SubjectConfig(
+    color: Color(0xFF5C6BC0),
+    image: 'assets/src/certificate.png',
+  ),
+  'BCA': SubjectConfig(
     color: Color(0xFF26C6DA),
-    image: 'assets/src/accounts.png',
+    image: 'assets/src/certificate.png',
   ),
-  'Business Studies': SubjectConfig(
+  'BA': SubjectConfig(
     color: Color(0xFFFFB300),
-    image: 'assets/src/business.png',
+    image: 'assets/src/certificate.png',
   ),
-  'Economics': SubjectConfig(
+  'Language': SubjectConfig(
     color: Color(0xFF8BC34A),
-    image: 'assets/src/economics.png',
+    image: 'assets/src/language.png',
   ),
 
   // Competitive Exams
@@ -299,15 +292,15 @@ final Map<String, SubjectConfig> subjectConfigs = {
   ),
   'Quantitative Aptitude': SubjectConfig(
     color: Color(0xFF6D4C41),
-    image: 'assets/src/quant.png',
-  ),
-  'Current Affairs': SubjectConfig(
-    color: Color(0xFFEC407A),
-    image: 'assets/src/current.png',
+    image: 'assets/src/function.png',
   ),
   'General Awareness': SubjectConfig(
     color: Color(0xFF7CB342),
     image: 'assets/src/gk.png',
+  ),
+  'Reasoning': SubjectConfig(
+    color: Color(0xFFD84315),
+    image: 'assets/src/reasoning.png',
   ),
 
   // Computer / Engineering
@@ -320,14 +313,24 @@ final Map<String, SubjectConfig> subjectConfigs = {
     image: 'assets/src/me.png',
   ),
   'Civil Engineering': SubjectConfig(
-    color: Color(0xFF3949AB),
+    color: Color(0xFFEC407A),
     image: 'assets/src/civil.png',
+  ),
+  'Electrical Engineering': SubjectConfig(
+    color: Color(0xFFFFB300),
+    image: 'assets/src/electrical.png',
+  ),
+  'Electronics & Communication': SubjectConfig(
+    color: Color(0xFF42A5F5),
+    image: 'assets/src/electronics.png',
   ),
 };
 
 class _SubjectCard extends StatelessWidget {
   final String title;
-  const _SubjectCard({required this.title});
+  final String stream; // JEE / NEET / SSC etc
+
+  const _SubjectCard({required this.title, required this.stream});
 
   @override
   Widget build(BuildContext context) {
@@ -335,50 +338,65 @@ class _SubjectCard extends StatelessWidget {
     final bg = config?.color ?? Colors.grey.shade600;
     final image = config?.image ?? 'assets/src/icon.png';
 
-    return Container(
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                gradient: LinearGradient(
-                  begin: Alignment.bottomRight,
-                  end: Alignment.topLeft,
-                  colors: [
-                    Colors.white.withOpacity(.18),
-                    Colors.white.withOpacity(.05),
-                    Colors.transparent,
-                  ],
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+
+      /// 🔥 TAP LOGIC
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                SubjectFeedScreen(subjectName: title, stream: stream),
+          ),
+        );
+      },
+
+      child: Container(
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomRight,
+                    end: Alignment.topLeft,
+                    colors: [
+                      Colors.white.withOpacity(.18),
+                      Colors.white.withOpacity(.05),
+                      Colors.transparent,
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-          Positioned(
-            right: -8,
-            bottom: -8,
-            child: Opacity(
-              opacity: .18,
-              child: Image.asset(image, width: 72, height: 72),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Text(
-              title.toUpperCase(),
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-                letterSpacing: .6,
+            Positioned(
+              right: -8,
+              bottom: -8,
+              child: Opacity(
+                opacity: .18,
+                child: Image.asset(image, width: 72, height: 72),
               ),
             ),
-          ),
-        ],
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Text(
+                title.toUpperCase(),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                  letterSpacing: .6,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

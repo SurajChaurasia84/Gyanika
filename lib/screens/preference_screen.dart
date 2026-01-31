@@ -62,13 +62,12 @@ class _PreferenceScreenState extends State<PreferenceScreen> {
       'Chemistry',
     ],
     'CUET': [
-      'English',
-      'Hindi',
+      'Language',
       'Mathematics',
       'Physics',
       'Chemistry',
     ],
-    'College': ['B.Tech', 'B.E', 'B.Sc', 'BCA', 'B.Com', 'BBA', 'BA'],
+    'College': ['B.Tech', 'B.Sc', 'BCA', 'BA'],
     'GATE': [
       'Computer Science & IT',
       'Mechanical Engineering',
@@ -77,8 +76,8 @@ class _PreferenceScreenState extends State<PreferenceScreen> {
       'Civil Engineering',
     ],
     'SSC': [
-      'General Intelligence & Reasoning',
-      'Quantitative Aptitude (Mathematics)',
+      'Reasoning',
+      'Quantitative Aptitude',
       'General Awareness',
       'English Comprehension',
     ],

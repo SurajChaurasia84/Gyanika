@@ -88,6 +88,11 @@ flutter:
     - assets/src/me.png
     - assets/src/moral.png
     - assets/src/science.png
+    - assets/src/electrical.png
+    - assets/src/certificate.png
+    - assets/src/electronics.png
+    - assets/src/reasoning.png
+    - assets/src/language.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:
