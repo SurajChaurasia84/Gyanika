@@ -293,7 +293,7 @@ class _UserPostsList extends StatelessWidget {
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
-          .collection('questions')
+          .collection(collection)
           .where('uid', isEqualTo: uid)
           .orderBy('createdAt', descending: true)
           .snapshots(),
@@ -317,7 +317,7 @@ class _UserPostsList extends StatelessWidget {
           itemBuilder: (context, i) {
             final data = docs[i].data() as Map<String, dynamic>;
             return _PostCard(
-              title: data['question'] ?? '',
+              title: data['content'] ?? '',
               category: data['category'] ?? '',
               type: 'Question',
             );
@@ -411,13 +411,13 @@ class _MixedPostsList extends StatelessWidget {
             return ListView.separated(
               padding: const EdgeInsets.all(12),
               itemCount: all.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
               itemBuilder: (context, i) {
                 final data = all[i].data() as Map<String, dynamic>;
                 final isQuiz = data.containsKey('questions');
 
                 return _PostCard(
-                  title: data['title'] ?? data['question'] ?? '',
+                  title: data['content'] ?? data['content'] ?? '',
                   category: data['category'] ?? '',
                   type: isQuiz ? 'Quiz' : 'Poll',
                 );

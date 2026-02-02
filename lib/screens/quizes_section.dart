@@ -78,29 +78,47 @@ class FeedCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ================= UPDATED HEADER ROW =================
             Row(
               children: [
-                CircleAvatar(
-                  backgroundColor: Colors.indigo,
-                  child: Text(
-                    safeName[0].toUpperCase(),
-                    style: const TextStyle(color: Colors.white),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => UserProfileScreen(uid: data['uid']),
+                      ),
+                    );
+                  },
+                  child: CircleAvatar(
+                    backgroundColor: Colors.indigo,
+                    child: Text(
+                      safeName[0].toUpperCase(),
+                      style: const TextStyle(color: Colors.white),
+                    ),
                   ),
                 ),
+
                 const SizedBox(width: 8),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      safeName,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    Text(
-                      '${type.toUpperCase()} • ${data['category']} • ${timeAgo(data['createdAt'])}',
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                  ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        safeName,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      Text(
+                        '${type.toUpperCase()} • ${data['category']} • ${timeAgo(data['createdAt'])}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
+                FollowButton(targetUid: data['uid']),
               ],
             ),
 
@@ -333,6 +351,194 @@ class _AnswerBoxState extends State<AnswerBox> {
           },
         ),
       ],
+    );
+  }
+}
+
+// ================= FOLLOW BUTTON WIDGET =================
+class FollowButton extends StatelessWidget {
+  final String targetUid;
+  const FollowButton({super.key, required this.targetUid});
+
+  @override
+  Widget build(BuildContext context) {
+    final myUid = FirebaseAuth.instance.currentUser!.uid;
+    if (myUid == targetUid) return const SizedBox();
+
+    final ref = FirebaseFirestore.instance
+        .collection('users')
+        .doc(targetUid)
+        .collection('followers')
+        .doc(myUid);
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: ref.snapshots(),
+      builder: (_, snap) {
+        final isFollowing = snap.data?.exists ?? false;
+        return InkWell(
+          onTap: () async {
+            final batch = FirebaseFirestore.instance.batch();
+            final myRef = FirebaseFirestore.instance
+                .collection('users')
+                .doc(myUid)
+                .collection('following')
+                .doc(targetUid);
+
+            if (isFollowing) {
+              batch.delete(ref);
+              batch.delete(myRef);
+            } else {
+              batch.set(ref, {'time': Timestamp.now()});
+              batch.set(myRef, {'time': Timestamp.now()});
+            }
+            await batch.commit();
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: isFollowing ? Colors.grey.shade200 : Colors.indigo,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              isFollowing ? 'Following' : 'Follow',
+              style: TextStyle(
+                fontSize: 12,
+                color: isFollowing ? Colors.black : Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ================= USER PROFILE SCREEN =================
+class UserProfileScreen extends StatelessWidget {
+  final String uid;
+  const UserProfileScreen({super.key, required this.uid});
+
+  @override
+  Widget build(BuildContext context) {
+    final userRef = FirebaseFirestore.instance.collection('users').doc(uid);
+
+    return Scaffold(
+      appBar: AppBar(),
+      body: StreamBuilder<DocumentSnapshot>(
+        stream: userRef.snapshots(),
+        builder: (_, snap) {
+          if (!snap.hasData)
+            return const Center(child: CircularProgressIndicator());
+          final user = snap.data!.data() as Map<String, dynamic>;
+          final username = user['username'] ?? 'User';
+
+          return Column(
+            children: [
+              const SizedBox(height: 20),
+              CircleAvatar(
+                radius: 40,
+                backgroundColor: Colors.indigo,
+                child: Text(
+                  username[0].toUpperCase(),
+                  style: const TextStyle(fontSize: 28, color: Colors.white),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                username,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _Count(uid: uid, label: 'Posts'),
+                  _Count(uid: uid, label: 'Followers'),
+                  _Count(uid: uid, label: 'Following'),
+                ],
+              ),
+              const Divider(height: 30),
+              Expanded(child: _UserPosts(uid: uid)),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _Count extends StatelessWidget {
+  final String uid;
+  final String label;
+  const _Count({required this.uid, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final ref = label == 'Followers'
+        ? FirebaseFirestore.instance
+              .collection('users')
+              .doc(uid)
+              .collection('followers')
+        : label == 'Following'
+        ? FirebaseFirestore.instance
+              .collection('users')
+              .doc(uid)
+              .collection('following')
+        : FirebaseFirestore.instance
+              .collection('questions')
+              .where('uid', isEqualTo: uid);
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: ref.snapshots(),
+      builder: (_, snap) {
+        final count = snap.data?.docs.length ?? 0;
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
+            children: [
+              Text(
+                count.toString(),
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              Text(label, style: const TextStyle(color: Colors.grey)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _UserPosts extends StatelessWidget {
+  final String uid;
+  const _UserPosts({required this.uid});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('questions')
+          .where('uid', isEqualTo: uid)
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (_, snap) {
+        if (!snap.hasData)
+          return const Center(child: CircularProgressIndicator());
+        if (snap.data!.docs.isEmpty)
+          return const Center(child: Text('No posts yet'));
+
+        return ListView.builder(
+          itemCount: snap.data!.docs.length,
+          itemBuilder: (_, i) {
+            final data = snap.data!.docs[i].data() as Map<String, dynamic>;
+            return ListTile(title: Text(data['content'] ?? ''));
+          },
+        );
+      },
     );
   }
 }
