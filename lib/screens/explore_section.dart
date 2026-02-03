@@ -88,7 +88,6 @@ class _ExploreSectionState extends State<ExploreSection> {
       child: Scaffold(
         appBar: AppBar(
           elevation: 0,
-          backgroundColor: Colors.transparent,
           surfaceTintColor: Colors.transparent,
           title: isSearching
               ? TextField(
