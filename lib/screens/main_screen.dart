@@ -5,9 +5,7 @@ import 'package:iconsax/iconsax.dart';
 
 import 'home_section.dart';
 import 'explore_section.dart';
-import 'quizes_section.dart';
 import 'library_section.dart';
-// import 'profile_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -22,7 +20,6 @@ class _MainScreenState extends State<MainScreen> {
   final List<Widget> _screens = const [
     HomeSection(),
     ExploreSection(),
-    FeedScreen(),
     LibrarySection(),
     ProfileScreen(),
   ];
@@ -76,18 +73,12 @@ class _MainScreenState extends State<MainScreen> {
             ),
             BottomNavigationBarItem(
               icon: _currentIndex == 2
-                  ? const Icon(Iconsax.cup5, size: 30)
-                  : const Icon(Iconsax.cup, size: 25),
-              label: 'Quizes',
-            ),
-            BottomNavigationBarItem(
-              icon: _currentIndex == 3
                   ? const Icon(Iconsax.layer5, size: 30)
                   : const Icon(Iconsax.layer, size: 25),
               label: 'Library',
             ),
             BottomNavigationBarItem(
-              icon: _currentIndex == 4
+              icon: _currentIndex == 3
                   ? const Icon(Iconsax.profile_circle5, size: 30)
                   : const Icon(Iconsax.profile_circle, size: 25),
               label: 'Profile',
