@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:iconsax/iconsax.dart';
 import 'package:gyanika/screens/add_poll_screen.dart';
+import 'settings_screen.dart';
+import 'library_section.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -42,8 +45,38 @@ class _ProfileScreenState extends State<ProfileScreen>
             title: Text('@${user['username'] ?? ''}'),
             actions: [
               IconButton(
+                icon: const Icon(Icons.edit_outlined),
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (_) => EditProfileDialog(
+                      uid: uid,
+                      initialName: user['name'] ?? '',
+                      initialBio: user['bio'] ?? '',
+                    ),
+                  );
+                },
+              ),
+              IconButton(
                 icon: const Icon(Icons.settings_outlined),
-                onPressed: () {},
+                onPressed: () {
+                    Navigator.push(
+                      context,
+                      PageRouteBuilder(
+                        transitionDuration: const Duration(milliseconds: 250),
+                        pageBuilder: (_, _, _) => const SettingsScreen(),
+                        transitionsBuilder: (_, animation, _, child) {
+                          return FadeTransition(
+                            opacity: CurvedAnimation(
+                              parent: animation,
+                              curve: Curves.easeInOut,
+                            ),
+                            child: child,
+                          );
+                        },
+                      ),
+                    );
+                  },
               ),
             ],
           ),
@@ -126,26 +159,6 @@ class _ProfileScreenState extends State<ProfileScreen>
 
                 const SizedBox(height: 12),
 
-                /// ================= EDIT PROFILE =================
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 40,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        elevation: 0,
-                        backgroundColor: Colors.indigo.shade50,
-                        foregroundColor: Colors.indigo,
-                      ),
-                      onPressed: () {},
-                      child: const Text("Edit Profile"),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
                 /// ================= TABS =================
                 TabBar(
                   controller: _tabController,
@@ -202,7 +215,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                 const SizedBox(height: 12),
 
                 _CreateOptionTile(
-                  icon: Icons.help_outline,
+                  icon: Iconsax.message_question,
                   label: "Question",
                   onTap: () {
                     Navigator.push(
@@ -225,7 +238,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                 ),
 
                 _CreateOptionTile(
-                  icon: Icons.quiz_outlined,
+                  icon: Iconsax.chart,
                   label: "Quiz",
                   onTap: () {
                     Navigator.push(
@@ -248,7 +261,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                 ),
 
                 _CreateOptionTile(
-                  icon: Icons.poll_outlined,
+                  icon: Iconsax.percentage_square,
                   label: "Poll",
                   onTap: () {
                     Navigator.push(
@@ -295,9 +308,17 @@ class _UserPostsList extends StatelessWidget {
       stream: FirebaseFirestore.instance
           .collection(collection)
           .where('uid', isEqualTo: uid)
-          .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(
+            child: Text(
+              'Failed to load questions',
+              style: const TextStyle(color: Colors.grey),
+            ),
+          );
+        }
+
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
@@ -308,7 +329,17 @@ class _UserPostsList extends StatelessWidget {
           );
         }
 
-        final docs = snapshot.data!.docs;
+        final docs = snapshot.data!.docs.toList()
+          ..sort((a, b) {
+            final aData = a.data() as Map<String, dynamic>;
+            final bData = b.data() as Map<String, dynamic>;
+            final aTs = aData['createdAt'] as Timestamp?;
+            final bTs = bData['createdAt'] as Timestamp?;
+            if (aTs == null && bTs == null) return 0;
+            if (aTs == null) return 1;
+            if (bTs == null) return -1;
+            return bTs.compareTo(aTs);
+          });
 
         return ListView.separated(
           padding: const EdgeInsets.all(12),
@@ -316,10 +347,26 @@ class _UserPostsList extends StatelessWidget {
           separatorBuilder: (_, _) => const SizedBox(height: 10),
           itemBuilder: (context, i) {
             final data = docs[i].data() as Map<String, dynamic>;
+            final postId = docs[i].id;
             return _PostCard(
               title: data['content'] ?? '',
               category: data['category'] ?? '',
               type: 'Question',
+              likes: (data['likes'] ?? 0) as int,
+              answered: (data['answeredCount'] ?? 0) as int,
+              createdAt: data['createdAt'] as Timestamp?,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => PostDetailScreen(
+                      postId: postId,
+                      collection: 'questions',
+                      type: 'Question',
+                    ),
+                  ),
+                );
+              },
             );
           },
         );
@@ -414,12 +461,30 @@ class _MixedPostsList extends StatelessWidget {
               separatorBuilder: (_, _) => const SizedBox(height: 10),
               itemBuilder: (context, i) {
                 final data = all[i].data() as Map<String, dynamic>;
-                final isQuiz = data.containsKey('questions');
+                final type = (data['type'] ?? '').toString();
+                final isQuiz = type == 'quiz';
+                final postId = all[i].id;
+                final collection = isQuiz ? 'quizzes' : 'polls';
 
                 return _PostCard(
-                  title: data['content'] ?? data['content'] ?? '',
+                  title: 'Que. ${data['content'] ?? ''}',
                   category: data['category'] ?? '',
                   type: isQuiz ? 'Quiz' : 'Poll',
+                  likes: (data['likes'] ?? 0) as int,
+                  answered: (data['answeredCount'] ?? 0) as int,
+                  createdAt: data['createdAt'] as Timestamp?,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => PostDetailScreen(
+                          postId: postId,
+                          collection: collection,
+                          type: isQuiz ? 'Quiz' : 'Poll',
+                        ),
+                      ),
+                    );
+                  },
                 );
               },
             );
@@ -434,48 +499,1024 @@ class _PostCard extends StatelessWidget {
   final String title;
   final String category;
   final String type;
+  final int likes;
+  final int answered;
+  final Timestamp? createdAt;
+  final VoidCallback? onTap;
 
   const _PostCard({
     required this.title,
     required this.category,
     required this.type,
+    this.likes = 0,
+    this.answered = 0,
+    this.createdAt,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                type,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 6),
+              _MetaRow(
+                items: [
+                  _MetaItem.label(_timeLabel(createdAt)),
+                  if (category.isNotEmpty) _MetaItem.label(category),
+                  _MetaItem.iconText(
+                    icon: Icons.favorite,
+                    text: likes.toString(),
+                  ),
+                  _MetaItem.iconText(
+                    icon: Icons.question_answer,
+                    text: answered.toString(),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class EditProfileDialog extends StatefulWidget {
+  final String uid;
+  final String initialName;
+  final String initialBio;
+
+  const EditProfileDialog({
+    super.key,
+    required this.uid,
+    required this.initialName,
+    required this.initialBio,
+  });
+
+  @override
+  State<EditProfileDialog> createState() => _EditProfileDialogState();
+}
+
+class _EditProfileDialogState extends State<EditProfileDialog> {
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _bioCtrl;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController(text: widget.initialName);
+    _bioCtrl = TextEditingController(text: widget.initialBio);
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _bioCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    await FirebaseFirestore.instance.collection('users').doc(widget.uid).set(
+      {
+        'name': _nameCtrl.text.trim(),
+        'bio': _bioCtrl.text.trim(),
+      },
+      SetOptions(merge: true),
+    );
+    if (!mounted) return;
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Edit Profile'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _nameCtrl,
+            decoration: const InputDecoration(labelText: 'Name'),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _bioCtrl,
+            decoration: const InputDecoration(labelText: 'Bio'),
+            minLines: 1,
+            maxLines: 3,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: _saving ? null : _save,
+          child: _saving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
+class PostDetailScreen extends StatelessWidget {
+  final String postId;
+  final String collection;
+  final String type;
+
+  const PostDetailScreen({
+    super.key,
+    required this.postId,
+    required this.collection,
+    required this.type,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final postRef =
+        FirebaseFirestore.instance.collection(collection).doc(postId);
+    final myUid = FirebaseAuth.instance.currentUser!.uid;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(type),
+        actions: [
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (value) async {
+              if (value == 'edit') {
+                showDialog(
+                  context: context,
+                  builder: (_) => _EditPostDialog(
+                    postRef: postRef,
+                  ),
+                );
+              }
+              if (value == 'delete') {
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (_) => AlertDialog(
+                    title: const Text('Delete Post'),
+                    content: const Text('Are you sure you want to delete?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('Cancel'),
+                      ),
+                      ElevatedButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('Delete'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirm != true) return;
+                await postRef.delete();
+                await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(myUid)
+                    .set(
+                  {'posts': FieldValue.increment(-1)},
+                  SetOptions(merge: true),
+                );
+                if (!context.mounted) return;
+                Navigator.pop(context);
+              }
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'edit', child: Text('Edit')),
+              PopupMenuItem(value: 'delete', child: Text('Delete')),
+            ],
+          ),
+        ],
+      ),
+      body: StreamBuilder<DocumentSnapshot>(
+        stream: postRef.snapshots(),
+        builder: (_, snap) {
+          if (!snap.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final data = snap.data!.data() as Map<String, dynamic>;
+          final content = (data['content'] ?? '').toString();
+          final category = (data['category'] ?? '').toString();
+          final likes = (data['likes'] ?? 0) as int;
+          final answered = (data['answeredCount'] ?? 0) as int;
+          final createdAt = data['createdAt'] as Timestamp?;
+          final options = (data['options'] as List?) ?? const [];
+          final correctIndex = data['correctIndex'] as int?;
+
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Text(
+                content,
+                style: const TextStyle(fontSize: 16),
+              ),
+              const SizedBox(height: 8),
+              _MetaRow(
+                items: [
+                  _MetaItem.label(_timeLabel(createdAt)),
+                  if (category.isNotEmpty) _MetaItem.label(category),
+                  _MetaItem.iconText(
+                    icon: Icons.favorite,
+                    text: likes.toString(),
+                  ),
+                  if (type == 'Question')
+                    _MetaItem.iconText(
+                      icon: Icons.question_answer,
+                      text: answered.toString(),
+                    ),
+                ],
+              ),
+              if (type == 'Poll' || type == 'Quiz') ...[
+                const SizedBox(height: 16),
+                const Text(
+                  'Options',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                _OptionStatsList(
+                  postId: postId,
+                  type: type,
+                  options: options,
+                  correctIndex: correctIndex,
+                ),
+              ],
+              if (type == 'Question') ...[
+                const SizedBox(height: 16),
+                const Text(
+                  'Answers',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                _AnswerList(postId: postId),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _OptionStatsList extends StatelessWidget {
+  final String postId;
+  final String type;
+  final List options;
+  final int? correctIndex;
+
+  const _OptionStatsList({
+    required this.postId,
+    required this.type,
+    required this.options,
+    required this.correctIndex,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (options.isEmpty) {
+      return const Text('No options available');
+    }
+
+    final collection = type == 'Quiz' ? 'quizzes' : 'polls';
+    final subcollection = type == 'Quiz' ? 'attempts' : 'votes';
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection(collection)
+          .doc(postId)
+          .collection(subcollection)
+          .snapshots(),
+      builder: (context, snap) {
+        if (!snap.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final docs = snap.data!.docs;
+        final counts = List<int>.filled(options.length, 0);
+        for (final d in docs) {
+          final data = d.data() as Map<String, dynamic>;
+          if (type == 'Quiz') {
+            final index = data['index'];
+            if (index is int && index >= 0 && index < counts.length) {
+              counts[index] += 1;
+            }
+          } else {
+            final option = data['option'];
+            if (option is String) {
+              final idx = options.indexOf(option);
+              if (idx != -1) counts[idx] += 1;
+            }
+          }
+        }
+
+        final total = counts.fold<int>(0, (a, b) => a + b);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ...List.generate(options.length, (i) {
+              final percent =
+                  total == 0 ? 0 : ((counts[i] / total) * 100).round();
+              final isCorrect = type == 'Quiz' && correctIndex == i;
+              final fillColor = isCorrect
+                  ? Theme.of(context).colorScheme.primary.withOpacity(0.18)
+                  : Theme.of(context).colorScheme.primary.withOpacity(0.10);
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color:
+                        Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                  ),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Stack(
+                    children: [
+                      FractionallySizedBox(
+                        widthFactor: percent / 100,
+                        alignment: Alignment.centerLeft,
+                        child: Container(
+                          height: 44,
+                          color: fillColor,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                options[i].toString(),
+                                style: TextStyle(
+                                  fontWeight: isCorrect
+                                      ? FontWeight.w600
+                                      : FontWeight.w400,
+                                  color: isCorrect
+                                      ? Theme.of(context).colorScheme.primary
+                                      : Theme.of(context)
+                                          .colorScheme
+                                          .onSurface,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              '$percent%',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+            const SizedBox(height: 4),
+            Center(
+              child: Text(
+                type == 'Quiz' ? '$total answers' : '$total votes',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _AnswerList extends StatelessWidget {
+  final String postId;
+  const _AnswerList({required this.postId});
+
+  @override
+  Widget build(BuildContext context) {
+    final ref = FirebaseFirestore.instance
+        .collection('questions')
+        .doc(postId)
+        .collection('answers');
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: ref.snapshots(),
+      builder: (_, snap) {
+        if (!snap.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snap.data!.docs.isEmpty) {
+          return const Text(
+            'No answers yet',
+            style: TextStyle(color: Colors.grey),
+          );
+        }
+
+        final docs = snap.data!.docs.toList()
+          ..sort((a, b) {
+            final aData = a.data() as Map<String, dynamic>;
+            final bData = b.data() as Map<String, dynamic>;
+            final aTs = aData['createdAt'] as Timestamp?;
+            final bTs = bData['createdAt'] as Timestamp?;
+            if (aTs == null && bTs == null) return 0;
+            if (aTs == null) return 1;
+            if (bTs == null) return -1;
+            return bTs.compareTo(aTs);
+          });
+
+        return ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: docs.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 10),
+          itemBuilder: (_, i) {
+            final data = docs[i].data() as Map<String, dynamic>;
+            return _AnswerTile(
+              answerId: docs[i].id,
+              answerUid: (data['uid'] ?? '').toString(),
+              text: (data['text'] ?? '').toString(),
+              createdAt: data['createdAt'] as Timestamp?,
+              postId: postId,
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _AnswerTile extends StatefulWidget {
+  final String answerId;
+  final String answerUid;
+  final String text;
+  final Timestamp? createdAt;
+  final String postId;
+
+  const _AnswerTile({
+    required this.answerId,
+    required this.answerUid,
+    required this.text,
+    required this.createdAt,
+    required this.postId,
+  });
+
+  @override
+  State<_AnswerTile> createState() => _AnswerTileState();
+}
+
+class _AnswerTileState extends State<_AnswerTile> {
+  bool _replying = false;
+  final TextEditingController _replyCtrl = TextEditingController();
+  bool _sending = false;
+  bool _showResponses = false;
+
+  @override
+  void dispose() {
+    _replyCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _sendReply() async {
+    if (_sending) return;
+    final text = _replyCtrl.text.trim();
+    if (text.isEmpty) return;
+    setState(() => _sending = true);
+    final myUid = FirebaseAuth.instance.currentUser!.uid;
+    await FirebaseFirestore.instance
+        .collection('questions')
+        .doc(widget.postId)
+        .collection('answers')
+        .doc(widget.answerId)
+        .collection('responses')
+        .add({
+      'uid': myUid,
+      'text': text,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    if (!mounted) return;
+    setState(() {
+      _sending = false;
+      _replying = false;
+      _replyCtrl.clear();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final userRef =
+        FirebaseFirestore.instance.collection('users').doc(widget.answerUid);
+    final timeText = _timeLabel(widget.createdAt);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            type,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Colors.indigo,
-              fontWeight: FontWeight.w600,
-            ),
+          StreamBuilder<DocumentSnapshot>(
+            stream: userRef.snapshots(),
+            builder: (_, snap) {
+              final username =
+                  (snap.data?.data() as Map<String, dynamic>?)?['username'] ??
+                      'User';
+              final safeName = username.toString();
+              return Row(
+                children: [
+                  InkWell(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              UserProfileScreen(uid: widget.answerUid),
+                        ),
+                      );
+                    },
+                    child: CircleAvatar(
+                      radius: 14,
+                      backgroundColor: Colors.indigo,
+                      child: Text(
+                        safeName.isNotEmpty ? safeName[0].toUpperCase() : 'U',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              UserProfileScreen(uid: widget.answerUid),
+                        ),
+                      );
+                    },
+                    child: Text(
+                      safeName,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '•',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    timeText,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: Icon(
+                      _showResponses
+                          ? Icons.keyboard_arrow_up
+                          : Icons.keyboard_arrow_down,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                    onPressed: () =>
+                        setState(() => _showResponses = !_showResponses),
+                  ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 6),
-          Text(
-            title,
-            style: const TextStyle(fontSize: 14),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+          Text(widget.text),
+          if (_showResponses) ...[
+            const SizedBox(height: 8),
+            _ResponseList(
+              postId: widget.postId,
+              answerId: widget.answerId,
+            ),
+          ],
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              TextButton(
+                onPressed: () => setState(() => _replying = !_replying),
+                child: Text(_replying ? 'Cancel' : 'Reply'),
+              ),
+            ],
           ),
-          if (category.isNotEmpty) ...[
+          if (_replying) ...[
+            TextField(
+              controller: _replyCtrl,
+              decoration: const InputDecoration(
+                hintText: 'Write a reply...',
+              ),
+            ),
             const SizedBox(height: 6),
-            Text(
-              category,
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            Align(
+              alignment: Alignment.centerRight,
+              child: ElevatedButton(
+                onPressed: _sending ? null : _sendReply,
+                child: _sending
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Send'),
+              ),
             ),
           ],
         ],
       ),
+    );
+  }
+}
+
+String _timeAgo(Timestamp t) {
+  final d = DateTime.now().difference(t.toDate());
+  if (d.inMinutes < 1) return 'just now';
+  if (d.inMinutes < 60) return '${d.inMinutes}m ago';
+  if (d.inHours < 24) return '${d.inHours}h ago';
+  return '${d.inDays}d ago';
+}
+
+String _timeLabel(Timestamp? t) {
+  if (t == null) return 'just now';
+  return _timeAgo(t);
+}
+
+class _MetaItem {
+  final IconData? icon;
+  final String text;
+
+  const _MetaItem._({required this.text, this.icon});
+
+  static _MetaItem label(String text) => _MetaItem._(text: text);
+
+  static _MetaItem iconText({
+    required IconData icon,
+    required String text,
+  }) =>
+      _MetaItem._(text: text, icon: icon);
+}
+
+class _MetaRow extends StatelessWidget {
+  final List<_MetaItem> items;
+
+  const _MetaRow({required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.onSurfaceVariant;
+    final widgets = <Widget>[];
+    for (var i = 0; i < items.length; i++) {
+      final item = items[i];
+      if (item.icon != null) {
+        widgets.add(
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(item.icon, size: 14, color: color),
+              const SizedBox(width: 4),
+              Text(item.text, style: TextStyle(fontSize: 12, color: color)),
+            ],
+          ),
+        );
+      } else {
+        widgets.add(Text(item.text, style: TextStyle(fontSize: 12, color: color)));
+      }
+      if (i != items.length - 1) {
+        widgets.add(const SizedBox(width: 8));
+        widgets.add(Text('•', style: TextStyle(fontSize: 12, color: color)));
+        widgets.add(const SizedBox(width: 8));
+      }
+    }
+    return Wrap(
+      spacing: 0,
+      runSpacing: 6,
+      children: widgets,
+    );
+  }
+}
+
+class _ResponseList extends StatelessWidget {
+  final String postId;
+  final String answerId;
+
+  const _ResponseList({required this.postId, required this.answerId});
+
+  @override
+  Widget build(BuildContext context) {
+    final ref = FirebaseFirestore.instance
+        .collection('questions')
+        .doc(postId)
+        .collection('answers')
+        .doc(answerId)
+        .collection('responses');
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: ref.snapshots(),
+      builder: (_, snap) {
+        if (!snap.hasData) {
+          return const SizedBox.shrink();
+        }
+        if (snap.data!.docs.isEmpty) {
+          return const Text(
+            'No responses yet',
+            style: TextStyle(color: Colors.grey, fontSize: 12),
+          );
+        }
+
+        final docs = snap.data!.docs.toList()
+          ..sort((a, b) {
+            final aData = a.data() as Map<String, dynamic>;
+            final bData = b.data() as Map<String, dynamic>;
+            final aTs = aData['createdAt'] as Timestamp?;
+            final bTs = bData['createdAt'] as Timestamp?;
+            if (aTs == null && bTs == null) return 0;
+            if (aTs == null) return 1;
+            if (bTs == null) return -1;
+            return bTs.compareTo(aTs);
+          });
+
+        return ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: docs.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 6),
+          itemBuilder: (_, i) {
+            final data = docs[i].data() as Map<String, dynamic>;
+            final uid = (data['uid'] ?? '').toString();
+            final text = (data['text'] ?? '').toString();
+            final createdAt = data['createdAt'] as Timestamp?;
+
+            return _ResponseTile(
+              uid: uid,
+              text: text,
+              createdAt: createdAt,
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _ResponseTile extends StatelessWidget {
+  final String uid;
+  final String text;
+  final Timestamp? createdAt;
+
+  const _ResponseTile({
+    required this.uid,
+    required this.text,
+    required this.createdAt,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final userRef = FirebaseFirestore.instance.collection('users').doc(uid);
+    final timeText = _timeLabel(createdAt);
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: userRef.snapshots(),
+      builder: (_, snap) {
+        final username =
+            (snap.data?.data() as Map<String, dynamic>?)?['username'] ?? 'User';
+        final safeName = username.toString();
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            InkWell(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => UserProfileScreen(uid: uid),
+                  ),
+                );
+              },
+              child: CircleAvatar(
+                radius: 10,
+                backgroundColor: Colors.indigo,
+                child: Text(
+                  safeName.isNotEmpty ? safeName[0].toUpperCase() : 'U',
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      InkWell(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => UserProfileScreen(uid: uid),
+                            ),
+                          );
+                        },
+                        child: Text(
+                          safeName,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '•',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        timeText,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Text(text),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _EditPostDialog extends StatefulWidget {
+  final DocumentReference postRef;
+
+  const _EditPostDialog({required this.postRef});
+
+  @override
+  State<_EditPostDialog> createState() => _EditPostDialogState();
+}
+
+class _EditPostDialogState extends State<_EditPostDialog> {
+  final TextEditingController _contentCtrl = TextEditingController();
+  final TextEditingController _categoryCtrl = TextEditingController();
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _contentCtrl.dispose();
+    _categoryCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    await widget.postRef.set(
+      {
+        'content': _contentCtrl.text.trim(),
+        'category': _categoryCtrl.text.trim(),
+      },
+      SetOptions(merge: true),
+    );
+    if (!mounted) return;
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: widget.postRef.snapshots(),
+      builder: (_, snap) {
+        if (!snap.hasData) {
+          return const AlertDialog(
+            content: SizedBox(
+              height: 60,
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          );
+        }
+        final data = snap.data!.data() as Map<String, dynamic>;
+        _contentCtrl.text = (data['content'] ?? '').toString();
+        _categoryCtrl.text = (data['category'] ?? '').toString();
+
+        return AlertDialog(
+          title: const Text('Edit Post'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _contentCtrl,
+                decoration: const InputDecoration(labelText: 'Content'),
+                minLines: 1,
+                maxLines: 3,
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _categoryCtrl,
+                decoration: const InputDecoration(labelText: 'Category'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: _saving ? null : () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: _saving ? null : _save,
+              child: _saving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Save'),
+            ),
+          ],
+        );
+      },
     );
   }
 }
