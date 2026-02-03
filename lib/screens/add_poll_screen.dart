@@ -41,6 +41,13 @@ Map<String, dynamic> basePostData({
   };
 }
 
+Future<void> incrementUserPostsCount() async {
+  final user = FirebaseAuth.instance.currentUser!;
+  await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+    'posts': FieldValue.increment(1),
+  });
+}
+
 // ================= ADD QUESTION SCREEN =================
 class AddQuestionScreen extends StatefulWidget {
   const AddQuestionScreen({super.key});
@@ -66,6 +73,7 @@ class _AddQuestionScreenState extends State<AddQuestionScreen> {
             category: _category!,
           ),
         );
+    await incrementUserPostsCount();
 
     if (!mounted) return;
     Navigator.pop(context);
@@ -138,6 +146,7 @@ class _AddPollScreenState extends State<AddPollScreen> {
       'votes': List.filled(4, 0),
       'answeredCount': 0,
     });
+    await incrementUserPostsCount();
 
     if (!mounted) return;
     Navigator.pop(context);
@@ -220,6 +229,7 @@ class _AddQuizScreenState extends State<AddQuizScreen> {
       'correctIndex': correctIndex,
       'attemptedCount': 0,
     });
+    await incrementUserPostsCount();
 
     if (!mounted) return;
     Navigator.pop(context);
