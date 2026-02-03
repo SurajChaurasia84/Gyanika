@@ -1,55 +1,297 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'profile_screen.dart';
 
-class LibrarySection extends StatelessWidget {
+class LibrarySection extends StatefulWidget {
   const LibrarySection({super.key});
+
+  @override
+  State<LibrarySection> createState() => _LibrarySectionState();
+}
+
+class _LibrarySectionState extends State<LibrarySection> {
+  String _filter = 'All';
+  bool _showChips = true;
+  bool _isSearching = false;
+  final TextEditingController _searchCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Feed')),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('questions').snapshots(),
-        builder: (_, q) {
-          return StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance.collection('polls').snapshots(),
-            builder: (_, p) {
-              return StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('quizzes')
-                    .snapshots(),
-                builder: (_, z) {
-                  if (!q.hasData || !p.hasData || !z.hasData) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
+      appBar: AppBar(
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        title: _isSearching
+            ? TextField(
+                controller: _searchCtrl,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  hintText: 'Search username...',
+                  border: InputBorder.none,
+                ),
+                onChanged: (_) => setState(() {}),
+              )
+            : const Text('Feed'),
+        actions: [
+          IconButton(
+            icon: Icon(_isSearching ? Icons.close : Icons.search),
+            onPressed: () {
+              setState(() {
+                _isSearching = !_isSearching;
+                if (!_isSearching) {
+                  _searchCtrl.clear();
+                }
+              });
+            },
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          if (_isSearching && _searchCtrl.text.trim().isNotEmpty)
+            _UserSearchSuggestions(query: _searchCtrl.text.trim()),
+          if (!_isSearching)
+            AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeInOut,
+            child: _showChips
+                ? Column(
+                    children: [
+                      const SizedBox(height: 8),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Row(
+                          children: [
+                            _FilterChip(
+                              label: 'All',
+                              selected: _filter == 'All',
+                              onTap: () => setState(() => _filter = 'All'),
+                            ),
+                            _FilterChip(
+                              label: 'Questions',
+                              selected: _filter == 'Questions',
+                              onTap: () => setState(() => _filter = 'Questions'),
+                            ),
+                            _FilterChip(
+                              label: 'Quizzes',
+                              selected: _filter == 'Quizzes',
+                              onTap: () => setState(() => _filter = 'Quizzes'),
+                            ),
+                            _FilterChip(
+                              label: 'Polls',
+                              selected: _filter == 'Polls',
+                              onTap: () => setState(() => _filter = 'Polls'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                  )
+                : const SizedBox.shrink(),
+          ),
+          if (!_isSearching)
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+              stream:
+                  FirebaseFirestore.instance.collection('questions').snapshots(),
+              builder: (_, q) {
+                return StreamBuilder<QuerySnapshot>(
+                  stream:
+                      FirebaseFirestore.instance.collection('polls').snapshots(),
+                  builder: (_, p) {
+                    return StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('quizzes')
+                          .snapshots(),
+                      builder: (_, z) {
+                        if (!q.hasData || !p.hasData || !z.hasData) {
+                          return const Center(
+                              child: CircularProgressIndicator());
+                        }
 
-                  final docs = [
-                    ...q.data!.docs,
-                    ...p.data!.docs,
-                    ...z.data!.docs,
-                  ];
+                        final docs = [
+                          if (_filter == 'All' || _filter == 'Questions')
+                            ...q.data!.docs,
+                          if (_filter == 'All' || _filter == 'Polls')
+                            ...p.data!.docs,
+                          if (_filter == 'All' || _filter == 'Quizzes')
+                            ...z.data!.docs,
+                        ];
 
-                  docs.sort(
-                    (a, b) => (b['createdAt'] as Timestamp).compareTo(
-                      a['createdAt'] as Timestamp,
+                        if (docs.isEmpty) {
+                          return const Center(
+                            child: Text(
+                              'No posts found',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          );
+                        }
+
+                        docs.sort(
+                          (a, b) => (b['createdAt'] as Timestamp).compareTo(
+                            a['createdAt'] as Timestamp,
+                          ),
+                        );
+
+                        return NotificationListener<UserScrollNotification>(
+                          onNotification: (notification) {
+                            if (notification.direction ==
+                                    ScrollDirection.reverse &&
+                                _showChips) {
+                              setState(() => _showChips = false);
+                            } else if (notification.direction ==
+                                    ScrollDirection.forward &&
+                                !_showChips) {
+                              setState(() => _showChips = true);
+                            }
+                            return false;
+                          },
+                          child: ListView.builder(
+                            padding: const EdgeInsets.all(12),
+                            itemCount: docs.length,
+                            itemBuilder: (_, i) {
+                              final d =
+                                  docs[i].data() as Map<String, dynamic>;
+                              return FeedCard(data: d, id: docs[i].id);
+                            },
+                          ),
+                        );
+                      },
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _FilterChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected
+        ? Theme.of(context).colorScheme.primary
+        : Theme.of(context).colorScheme.surface;
+    final textColor = selected
+        ? Theme.of(context).colorScheme.onPrimary
+        : Theme.of(context).colorScheme.onSurface;
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: textColor,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UserSearchSuggestions extends StatelessWidget {
+  final String query;
+  const _UserSearchSuggestions({required this.query});
+
+  @override
+  Widget build(BuildContext context) {
+    final q = query.toLowerCase();
+    final ref = FirebaseFirestore.instance
+        .collection('users')
+        .orderBy('username')
+        .startAt([q]).endAt(['$q\uf8ff']);
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: ref.limit(10).snapshots(),
+      builder: (context, snap) {
+        if (!snap.hasData) {
+          return const SizedBox.shrink();
+        }
+        final docs = snap.data!.docs;
+        if (docs.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: Text(
+              'No users found',
+              style: TextStyle(color: Colors.grey),
+            ),
+          );
+        }
+
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: docs.length,
+            itemBuilder: (context, i) {
+              final data = docs[i].data() as Map<String, dynamic>;
+              final uid = docs[i].id;
+              final name = (data['name'] ?? '').toString();
+              final username = (data['username'] ?? '').toString();
+              final letter = username.isNotEmpty ? username[0].toUpperCase() : 'U';
+
+              return ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Colors.indigo,
+                  child: Text(
+                    letter,
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+                title: Text(name.isNotEmpty ? name : username),
+                subtitle: Text('@$username'),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ProfileScreen(uid: uid),
                     ),
-                  );
-
-                  return ListView.builder(
-                    padding: const EdgeInsets.all(12),
-                    itemCount: docs.length,
-                    itemBuilder: (_, i) {
-                      final d = docs[i].data() as Map<String, dynamic>;
-                      return FeedCard(data: d, id: docs[i].id);
-                    },
                   );
                 },
               );
             },
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 }
@@ -64,6 +306,8 @@ class FeedCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final type = data['type'];
     final collection = type == 'quiz' ? 'quizzes' : '${type}s';
+    final typeLabel =
+        type == 'quiz' ? 'Quiz' : type == 'poll' ? 'Poll' : 'Question';
     final username = (data['username'] ?? '').toString();
     final safeName = username.isNotEmpty ? username : 'User';
 
@@ -77,12 +321,13 @@ class FeedCard extends StatelessWidget {
             // ================= UPDATED HEADER ROW =================
             Row(
               children: [
-                GestureDetector(
+                InkWell(
+                  borderRadius: BorderRadius.circular(24),
                   onTap: () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => UserProfileScreen(uid: data['uid']),
+                        builder: (_) => ProfileScreen(uid: data['uid']),
                       ),
                     );
                   },
@@ -97,21 +342,31 @@ class FeedCard extends StatelessWidget {
 
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        safeName,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      Text(
-                        '${type.toUpperCase()} • ${data['category']} • ${timeAgo(data['createdAt'])}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey,
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ProfileScreen(uid: data['uid']),
                         ),
-                      ),
-                    ],
+                      );
+                    },
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          safeName,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        Text(
+                          '${type.toUpperCase()} • ${data['category']} • ${timeAgo(data['createdAt'])}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 FollowButton(targetUid: data['uid']),
@@ -122,29 +377,197 @@ class FeedCard extends StatelessWidget {
             Text('Que. ${data['content'] ?? ''}'),
 
             if (type == 'question') AnswerBox(postId: id),
-            if (type == 'poll')
-              PollWidget(postId: id, options: data['options']),
-            if (type == 'quiz')
-              QuizWidget(
-                postId: id,
-                options: data['options'],
-                correct: data['correctIndex'],
+            if (type == 'poll' || type == 'quiz') ...[
+              const SizedBox(height: 10),
+              const Text(
+                'Options',
+                style: TextStyle(fontWeight: FontWeight.w600),
               ),
+              const SizedBox(height: 8),
+              _OptionStatsList(
+                postId: id,
+                type: type,
+                options: (data['options'] as List?) ?? const [],
+                correctIndex: data['correctIndex'] as int?,
+              ),
+            ],
 
             const SizedBox(height: 10),
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                LikeButton(postId: id, collection: collection),
-                Text(formatCount(data['likes'] ?? 0)),
-                const SizedBox(width: 16),
-                const Icon(Icons.question_answer, size: 16, color: Colors.grey),
-                const SizedBox(width: 4),
-                Text(formatCount(data['answeredCount'] ?? 0)),
+                Row(
+                  children: [
+                    LikeButton(postId: id, collection: collection),
+                    Text(formatCount(data['likes'] ?? 0)),
+                  ],
+                ),
+                InkWell(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => PostDetailScreen(
+                          postId: id,
+                          collection: collection,
+                          type: typeLabel,
+                        ),
+                      ),
+                    );
+                  },
+                  child: Row(
+                    children: [
+                      Text(
+                        _answerLabel(
+                          type: type,
+                          count: data['answeredCount'] ?? 0,
+                        ),
+                        style: const TextStyle(color: Colors.grey),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(
+                        Icons.chevron_right,
+                        size: 16,
+                        color: Colors.grey,
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _OptionStatsList extends StatelessWidget {
+  final String postId;
+  final String type;
+  final List options;
+  final int? correctIndex;
+
+  const _OptionStatsList({
+    required this.postId,
+    required this.type,
+    required this.options,
+    required this.correctIndex,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (options.isEmpty) {
+      return const Text('No options available');
+    }
+
+    final collection = type == 'quiz' ? 'quizzes' : 'polls';
+    final subcollection = type == 'quiz' ? 'attempts' : 'votes';
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection(collection)
+          .doc(postId)
+          .collection(subcollection)
+          .snapshots(),
+      builder: (context, snap) {
+        if (!snap.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final docs = snap.data!.docs;
+        final counts = List<int>.filled(options.length, 0);
+        for (final d in docs) {
+          final data = d.data() as Map<String, dynamic>;
+          if (type == 'quiz') {
+            final index = data['index'];
+            if (index is int && index >= 0 && index < counts.length) {
+              counts[index] += 1;
+            }
+          } else {
+            final option = data['option'];
+            if (option is String) {
+              final idx = options.indexOf(option);
+              if (idx != -1) counts[idx] += 1;
+            }
+          }
+        }
+
+        final total = counts.fold<int>(0, (a, b) => a + b);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ...List.generate(options.length, (i) {
+              final percent = total == 0
+                  ? 0
+                  : ((counts[i] / total) * 100).round();
+              final isCorrect = type == 'quiz' && correctIndex == i;
+              final fillColor = type == 'quiz'
+                  ? (isCorrect
+                      ? Colors.green.withOpacity(0.18)
+                      : Colors.red.withOpacity(0.12))
+                  : Theme.of(context).colorScheme.primary.withOpacity(0.10);
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.outline.withOpacity(0.2),
+                  ),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Stack(
+                    children: [
+                      FractionallySizedBox(
+                        widthFactor: percent / 100,
+                        alignment: Alignment.centerLeft,
+                        child: Container(height: 44, color: fillColor),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                options[i].toString(),
+                                style: TextStyle(
+                                  fontWeight: isCorrect
+                                      ? FontWeight.w600
+                                      : FontWeight.w400,
+                                  color: isCorrect
+                                      ? Theme.of(context).colorScheme.primary
+                                      : Theme.of(context).colorScheme.onSurface,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              '$percent%',
+                              style: TextStyle(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ],
+        );
+      },
     );
   }
 }
@@ -576,4 +999,11 @@ String timeAgo(Timestamp t) {
   if (d.inMinutes < 60) return '${d.inMinutes}m ago';
   if (d.inHours < 24) return '${d.inHours}h ago';
   return '${d.inDays}d ago';
+}
+
+String _answerLabel({required String type, required int count}) {
+  if (type == 'question') return '$count answers';
+  if (type == 'quiz') return '$count answers';
+  if (type == 'poll') return '$count votes';
+  return '$count';
 }
