@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:gyanika/screens/add_poll_screen.dart';
+import 'package:gyanika/screens/add_post_screen.dart';
 import 'settings_screen.dart';
-import 'library_section.dart';
+// import 'library_section.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  final String? uid;
+  const ProfileScreen({super.key, this.uid});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -16,11 +17,14 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final uid = FirebaseAuth.instance.currentUser!.uid;
+  late final String uid;
+  late final String myUid;
 
   @override
   void initState() {
     super.initState();
+    myUid = FirebaseAuth.instance.currentUser!.uid;
+    uid = widget.uid ?? myUid;
     _tabController = TabController(length: 2, vsync: this);
   }
 
@@ -39,27 +43,30 @@ class _ProfileScreenState extends State<ProfileScreen>
         }
 
         final user = snapshot.data!.data() as Map<String, dynamic>;
+        final isOwner = uid == myUid;
 
         return Scaffold(
           appBar: AppBar(
             title: Text('@${user['username'] ?? ''}'),
             actions: [
-              IconButton(
-                icon: const Icon(Icons.edit_outlined),
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder: (_) => EditProfileDialog(
-                      uid: uid,
-                      initialName: user['name'] ?? '',
-                      initialBio: user['bio'] ?? '',
-                    ),
-                  );
-                },
-              ),
-              IconButton(
-                icon: const Icon(Icons.settings_outlined),
-                onPressed: () {
+              if (isOwner)
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined),
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (_) => EditProfileDialog(
+                        uid: uid,
+                        initialName: user['name'] ?? '',
+                        initialBio: user['bio'] ?? '',
+                      ),
+                    );
+                  },
+                ),
+              if (isOwner)
+                IconButton(
+                  icon: const Icon(Icons.settings_outlined),
+                  onPressed: () {
                     Navigator.push(
                       context,
                       PageRouteBuilder(
@@ -77,16 +84,20 @@ class _ProfileScreenState extends State<ProfileScreen>
                       ),
                     );
                   },
-              ),
+                ),
+              if (!isOwner)
+                _ProfileFollowButton(targetUid: uid),
             ],
           ),
 
           /// ================= FLOATING ADD BUTTON =================
-          floatingActionButton: FloatingActionButton(
-            backgroundColor: Colors.indigo,
-            child: const Icon(Icons.add),
-            onPressed: () => _showCreateOptions(context),
-          ),
+          floatingActionButton: isOwner
+              ? FloatingActionButton(
+                  backgroundColor: Colors.indigo,
+                  child: const Icon(Icons.add),
+                  onPressed: () => _showCreateOptions(context),
+                )
+              : null,
 
           body: SafeArea(
             child: Column(
@@ -195,6 +206,7 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   /// ================= BOTTOM CREATE OPTIONS =================
   void _showCreateOptions(BuildContext context) {
+    final parentContext = context;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -218,8 +230,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                   icon: Iconsax.message_question,
                   label: "Question",
                   onTap: () {
+                    Navigator.pop(context);
                     Navigator.push(
-                      context,
+                      parentContext,
                       PageRouteBuilder(
                         transitionDuration: const Duration(milliseconds: 250),
                         pageBuilder: (_, _, _) => const AddQuestionScreen(),
@@ -241,8 +254,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                   icon: Iconsax.chart,
                   label: "Quiz",
                   onTap: () {
+                    Navigator.pop(context);
                     Navigator.push(
-                      context,
+                      parentContext,
                       PageRouteBuilder(
                         transitionDuration: const Duration(milliseconds: 250),
                         pageBuilder: (_, _, _) => const AddQuizScreen(),
@@ -264,8 +278,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                   icon: Iconsax.percentage_square,
                   label: "Poll",
                   onTap: () {
+                    Navigator.pop(context);
                     Navigator.push(
-                      context,
+                      parentContext,
                       PageRouteBuilder(
                         transitionDuration: const Duration(milliseconds: 250),
                         pageBuilder: (_, _, _) => const AddPollScreen(),
@@ -414,6 +429,87 @@ class _CreateOptionTile extends StatelessWidget {
       leading: Icon(icon, color: Colors.indigo),
       title: Text(label),
       onTap: onTap,
+    );
+  }
+}
+
+class _ProfileFollowButton extends StatelessWidget {
+  final String targetUid;
+  const _ProfileFollowButton({required this.targetUid});
+
+  @override
+  Widget build(BuildContext context) {
+    final myUid = FirebaseAuth.instance.currentUser!.uid;
+    if (myUid == targetUid) return const SizedBox.shrink();
+
+    final ref = FirebaseFirestore.instance
+        .collection('users')
+        .doc(targetUid)
+        .collection('followers')
+        .doc(myUid);
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: ref.snapshots(),
+      builder: (_, snap) {
+        final isFollowing = snap.data?.exists ?? false;
+        return Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: InkWell(
+            onTap: () async {
+              final batch = FirebaseFirestore.instance.batch();
+              final myRef = FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(myUid)
+                  .collection('following')
+                  .doc(targetUid);
+
+              if (isFollowing) {
+                batch.delete(ref);
+                batch.delete(myRef);
+                batch.set(
+                  FirebaseFirestore.instance.collection('users').doc(targetUid),
+                  {'followers': FieldValue.increment(-1)},
+                  SetOptions(merge: true),
+                );
+                batch.set(
+                  FirebaseFirestore.instance.collection('users').doc(myUid),
+                  {'following': FieldValue.increment(-1)},
+                  SetOptions(merge: true),
+                );
+              } else {
+                batch.set(ref, {'time': Timestamp.now()});
+                batch.set(myRef, {'time': Timestamp.now()});
+                batch.set(
+                  FirebaseFirestore.instance.collection('users').doc(targetUid),
+                  {'followers': FieldValue.increment(1)},
+                  SetOptions(merge: true),
+                );
+                batch.set(
+                  FirebaseFirestore.instance.collection('users').doc(myUid),
+                  {'following': FieldValue.increment(1)},
+                  SetOptions(merge: true),
+                );
+              }
+              await batch.commit();
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: isFollowing ? Colors.grey.shade200 : Colors.indigo,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                isFollowing ? 'Following' : 'Follow',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isFollowing ? Colors.black : Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -684,52 +780,61 @@ class PostDetailScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text(type),
         actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert),
-            onSelected: (value) async {
-              if (value == 'edit') {
-                showDialog(
-                  context: context,
-                  builder: (_) => _EditPostDialog(
-                    postRef: postRef,
-                  ),
-                );
-              }
-              if (value == 'delete') {
-                final confirm = await showDialog<bool>(
-                  context: context,
-                  builder: (_) => AlertDialog(
-                    title: const Text('Delete Post'),
-                    content: const Text('Are you sure you want to delete?'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: const Text('Cancel'),
+          StreamBuilder<DocumentSnapshot>(
+            stream: postRef.snapshots(),
+            builder: (_, snap) {
+              final data = snap.data?.data() as Map<String, dynamic>?;
+              final ownerUid = (data?['uid'] ?? '').toString();
+              final isOwner = ownerUid == myUid;
+              if (!isOwner) return const SizedBox.shrink();
+              return PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert),
+                onSelected: (value) async {
+                  if (value == 'edit') {
+                    showDialog(
+                      context: context,
+                      builder: (_) => _EditPostDialog(
+                        postRef: postRef,
                       ),
-                      ElevatedButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: const Text('Delete'),
+                    );
+                  }
+                  if (value == 'delete') {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (_) => AlertDialog(
+                        title: const Text('Delete Post'),
+                        content: const Text('Are you sure you want to delete?'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Cancel'),
+                          ),
+                          ElevatedButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('Delete'),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                );
-                if (confirm != true) return;
-                await postRef.delete();
-                await FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(myUid)
-                    .set(
-                  {'posts': FieldValue.increment(-1)},
-                  SetOptions(merge: true),
-                );
-                if (!context.mounted) return;
-                Navigator.pop(context);
-              }
+                    );
+                    if (confirm != true) return;
+                    await postRef.delete();
+                    await FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(myUid)
+                        .set(
+                      {'posts': FieldValue.increment(-1)},
+                      SetOptions(merge: true),
+                    );
+                    if (!context.mounted) return;
+                    Navigator.pop(context);
+                  }
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'edit', child: Text('Edit')),
+                  PopupMenuItem(value: 'delete', child: Text('Delete')),
+                ],
+              );
             },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'edit', child: Text('Edit')),
-              PopupMenuItem(value: 'delete', child: Text('Delete')),
-            ],
           ),
         ],
       ),
@@ -743,7 +848,6 @@ class PostDetailScreen extends StatelessWidget {
           final content = (data['content'] ?? '').toString();
           final category = (data['category'] ?? '').toString();
           final likes = (data['likes'] ?? 0) as int;
-          final answered = (data['answeredCount'] ?? 0) as int;
           final createdAt = data['createdAt'] as Timestamp?;
           final options = (data['options'] as List?) ?? const [];
           final correctIndex = data['correctIndex'] as int?;
@@ -764,11 +868,6 @@ class PostDetailScreen extends StatelessWidget {
                     icon: Icons.favorite,
                     text: likes.toString(),
                   ),
-                  if (type == 'Question')
-                    _MetaItem.iconText(
-                      icon: Icons.question_answer,
-                      text: answered.toString(),
-                    ),
                 ],
               ),
               if (type == 'Poll' || type == 'Quiz') ...[
@@ -1090,7 +1189,7 @@ class _AnswerTileState extends State<_AnswerTile> {
                         context,
                         MaterialPageRoute(
                           builder: (_) =>
-                              UserProfileScreen(uid: widget.answerUid),
+                              ProfileScreen(uid: widget.answerUid),
                         ),
                       );
                     },
@@ -1114,7 +1213,7 @@ class _AnswerTileState extends State<_AnswerTile> {
                         context,
                         MaterialPageRoute(
                           builder: (_) =>
-                              UserProfileScreen(uid: widget.answerUid),
+                              ProfileScreen(uid: widget.answerUid),
                         ),
                       );
                     },
@@ -1360,7 +1459,7 @@ class _ResponseTile extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => UserProfileScreen(uid: uid),
+                    builder: (_) => ProfileScreen(uid: uid),
                   ),
                 );
               },
@@ -1389,7 +1488,7 @@ class _ResponseTile extends StatelessWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => UserProfileScreen(uid: uid),
+                              builder: (_) => ProfileScreen(uid: uid),
                             ),
                           );
                         },
