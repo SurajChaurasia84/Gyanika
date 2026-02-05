@@ -3,8 +3,22 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:gyanika/screens/add_post_screen.dart';
+import 'package:gyanika/helpers/notification_helper.dart';
 import 'settings_screen.dart';
 // import 'library_section.dart';
+
+Future<String> _currentUserLabel() async {
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+  if (uid == null) return 'Someone';
+  final snap =
+      await FirebaseFirestore.instance.collection('users').doc(uid).get();
+  final data = snap.data() ?? {};
+  final name = (data['name'] ?? '').toString().trim();
+  if (name.isNotEmpty) return name;
+  final username = (data['username'] ?? '').toString().trim();
+  if (username.isNotEmpty) return username;
+  return 'Someone';
+}
 
 class ProfileScreen extends StatefulWidget {
   final String? uid;
@@ -491,6 +505,16 @@ class _ProfileFollowButton extends StatelessWidget {
                 );
               }
               await batch.commit();
+
+              if (!isFollowing && myUid != targetUid) {
+                final myName = await _currentUserLabel();
+                await NotificationHelper.addActivity(
+                  targetUid: targetUid,
+                  type: 'follow',
+                  title: '$myName started followed you',
+                  actorUid: myUid,
+                );
+              }
             },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
