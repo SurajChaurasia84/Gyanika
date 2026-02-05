@@ -3,6 +3,22 @@ import 'package:flutter/rendering.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'profile_screen.dart';
+import 'package:gyanika/helpers/notification_helper.dart';
+
+Future<String> _currentUserLabel() async {
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+  if (uid == null) return 'Someone';
+  final snap = await FirebaseFirestore.instance
+      .collection('users')
+      .doc(uid)
+      .get();
+  final data = snap.data() ?? {};
+  final name = (data['name'] ?? '').toString().trim();
+  if (name.isNotEmpty) return name;
+  final username = (data['username'] ?? '').toString().trim();
+  if (username.isNotEmpty) return username;
+  return 'Someone';
+}
 
 class LibrarySection extends StatefulWidget {
   const LibrarySection({super.key});
@@ -16,11 +32,32 @@ class _LibrarySectionState extends State<LibrarySection> {
   bool _showChips = true;
   bool _isSearching = false;
   final TextEditingController _searchCtrl = TextEditingController();
+  final ScrollController _scrollCtrl = ScrollController();
+
+  static const int _pageSize = 10;
+  bool _loading = false;
+  bool _hasMoreQuestions = true;
+  bool _hasMorePolls = true;
+  bool _hasMoreQuizzes = true;
+  DocumentSnapshot? _lastQuestion;
+  DocumentSnapshot? _lastPoll;
+  DocumentSnapshot? _lastQuiz;
+  final List<QueryDocumentSnapshot> _questions = [];
+  final List<QueryDocumentSnapshot> _polls = [];
+  final List<QueryDocumentSnapshot> _quizzes = [];
 
   @override
   void dispose() {
     _searchCtrl.dispose();
+    _scrollCtrl.dispose();
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInitial();
+    _scrollCtrl.addListener(_onScroll);
   }
 
   @override
@@ -60,120 +97,251 @@ class _LibrarySectionState extends State<LibrarySection> {
             _UserSearchSuggestions(query: _searchCtrl.text.trim()),
           if (!_isSearching)
             AnimatedSize(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeInOut,
-            child: _showChips
-                ? Column(
-                    children: [
-                      const SizedBox(height: 8),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Row(
-                          children: [
-                            _FilterChip(
-                              label: 'All',
-                              selected: _filter == 'All',
-                              onTap: () => setState(() => _filter = 'All'),
-                            ),
-                            _FilterChip(
-                              label: 'Questions',
-                              selected: _filter == 'Questions',
-                              onTap: () => setState(() => _filter = 'Questions'),
-                            ),
-                            _FilterChip(
-                              label: 'Quizzes',
-                              selected: _filter == 'Quizzes',
-                              onTap: () => setState(() => _filter = 'Quizzes'),
-                            ),
-                            _FilterChip(
-                              label: 'Polls',
-                              selected: _filter == 'Polls',
-                              onTap: () => setState(() => _filter = 'Polls'),
-                            ),
-                          ],
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeInOut,
+              child: _showChips
+                  ? Column(
+                      children: [
+                        const SizedBox(height: 8),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Row(
+                            children: [
+                              _FilterChip(
+                                label: 'All',
+                                selected: _filter == 'All',
+                                onTap: () => _setFilter('All'),
+                              ),
+                              _FilterChip(
+                                label: 'Questions',
+                                selected: _filter == 'Questions',
+                                onTap: () => _setFilter('Questions'),
+                              ),
+                              _FilterChip(
+                                label: 'Quizzes',
+                                selected: _filter == 'Quizzes',
+                                onTap: () => _setFilter('Quizzes'),
+                              ),
+                              _FilterChip(
+                                label: 'Polls',
+                                selected: _filter == 'Polls',
+                                onTap: () => _setFilter('Polls'),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-                  )
-                : const SizedBox.shrink(),
-          ),
+                        const SizedBox(height: 8),
+                      ],
+                    )
+                  : const SizedBox.shrink(),
+            ),
           if (!_isSearching)
             Expanded(
-              child: StreamBuilder<QuerySnapshot>(
-              stream:
-                  FirebaseFirestore.instance.collection('questions').snapshots(),
-              builder: (_, q) {
-                return StreamBuilder<QuerySnapshot>(
-                  stream:
-                      FirebaseFirestore.instance.collection('polls').snapshots(),
-                  builder: (_, p) {
-                    return StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance
-                          .collection('quizzes')
-                          .snapshots(),
-                      builder: (_, z) {
-                        if (!q.hasData || !p.hasData || !z.hasData) {
-                          return const Center(
-                              child: CircularProgressIndicator());
-                        }
-
-                        final docs = [
-                          if (_filter == 'All' || _filter == 'Questions')
-                            ...q.data!.docs,
-                          if (_filter == 'All' || _filter == 'Polls')
-                            ...p.data!.docs,
-                          if (_filter == 'All' || _filter == 'Quizzes')
-                            ...z.data!.docs,
-                        ];
-
-                        if (docs.isEmpty) {
-                          return const Center(
-                            child: Text(
-                              'No posts found',
-                              style: TextStyle(color: Colors.grey),
-                            ),
-                          );
-                        }
-
-                        docs.sort(
-                          (a, b) => (b['createdAt'] as Timestamp).compareTo(
-                            a['createdAt'] as Timestamp,
-                          ),
-                        );
-
-                        return NotificationListener<UserScrollNotification>(
-                          onNotification: (notification) {
-                            if (notification.direction ==
-                                    ScrollDirection.reverse &&
-                                _showChips) {
-                              setState(() => _showChips = false);
-                            } else if (notification.direction ==
-                                    ScrollDirection.forward &&
-                                !_showChips) {
-                              setState(() => _showChips = true);
-                            }
-                            return false;
-                          },
-                          child: ListView.builder(
-                            padding: const EdgeInsets.all(12),
-                            itemCount: docs.length,
-                            itemBuilder: (_, i) {
-                              final d =
-                                  docs[i].data() as Map<String, dynamic>;
-                              return FeedCard(data: d, id: docs[i].id);
-                            },
-                          ),
-                        );
-                      },
-                    );
-                  },
-                );
-              },
+              child: _buildFeedList(),
             ),
-          ),
         ],
+      ),
+    );
+  }
+
+  void _onScroll() {
+    if (!_scrollCtrl.hasClients) return;
+    final max = _scrollCtrl.position.maxScrollExtent;
+    final current = _scrollCtrl.position.pixels;
+    if (current >= max - 200) {
+      _loadMore();
+    }
+  }
+
+  void _setFilter(String value) {
+    if (_filter == value) return;
+    setState(() => _filter = value);
+    _resetAndLoad();
+  }
+
+  void _resetAndLoad() {
+    _questions.clear();
+    _polls.clear();
+    _quizzes.clear();
+    _lastQuestion = null;
+    _lastPoll = null;
+    _lastQuiz = null;
+    _hasMoreQuestions = true;
+    _hasMorePolls = true;
+    _hasMoreQuizzes = true;
+    _loadInitial();
+  }
+
+  Future<void> _loadInitial() async {
+    if (_loading) return;
+    setState(() => _loading = true);
+    await _loadForFilter();
+    if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _loadMore() async {
+    if (_loading) return;
+    if (_filter == 'Questions' && !_hasMoreQuestions) return;
+    if (_filter == 'Polls' && !_hasMorePolls) return;
+    if (_filter == 'Quizzes' && !_hasMoreQuizzes) return;
+    if (_filter == 'All' &&
+        !_hasMoreQuestions &&
+        !_hasMorePolls &&
+        !_hasMoreQuizzes) {
+      return;
+    }
+    setState(() => _loading = true);
+    await _loadForFilter();
+    if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _loadForFilter() async {
+    if (_filter == 'Questions') {
+      await _loadCollection(
+        collection: 'questions',
+        target: _questions,
+        last: _lastQuestion,
+        setLast: (doc) => _lastQuestion = doc,
+        setHasMore: (v) => _hasMoreQuestions = v,
+      );
+      return;
+    }
+    if (_filter == 'Polls') {
+      await _loadCollection(
+        collection: 'polls',
+        target: _polls,
+        last: _lastPoll,
+        setLast: (doc) => _lastPoll = doc,
+        setHasMore: (v) => _hasMorePolls = v,
+      );
+      return;
+    }
+    if (_filter == 'Quizzes') {
+      await _loadCollection(
+        collection: 'quizzes',
+        target: _quizzes,
+        last: _lastQuiz,
+        setLast: (doc) => _lastQuiz = doc,
+        setHasMore: (v) => _hasMoreQuizzes = v,
+      );
+      return;
+    }
+
+    await _loadCollection(
+      collection: 'questions',
+      target: _questions,
+      last: _lastQuestion,
+      setLast: (doc) => _lastQuestion = doc,
+      setHasMore: (v) => _hasMoreQuestions = v,
+    );
+    await _loadCollection(
+      collection: 'polls',
+      target: _polls,
+      last: _lastPoll,
+      setLast: (doc) => _lastPoll = doc,
+      setHasMore: (v) => _hasMorePolls = v,
+    );
+    await _loadCollection(
+      collection: 'quizzes',
+      target: _quizzes,
+      last: _lastQuiz,
+      setLast: (doc) => _lastQuiz = doc,
+      setHasMore: (v) => _hasMoreQuizzes = v,
+    );
+  }
+
+  Future<void> _loadCollection({
+    required String collection,
+    required List<QueryDocumentSnapshot> target,
+    required DocumentSnapshot? last,
+    required void Function(DocumentSnapshot?) setLast,
+    required void Function(bool) setHasMore,
+  }) async {
+    Query query = FirebaseFirestore.instance
+        .collection(collection)
+        .orderBy('createdAt', descending: true)
+        .limit(_pageSize);
+    if (last != null) {
+      query = query.startAfterDocument(last);
+    }
+    final snap = await query.get();
+    if (snap.docs.isEmpty) {
+      setHasMore(false);
+      return;
+    }
+    target.addAll(snap.docs);
+    setLast(snap.docs.last);
+    setHasMore(snap.docs.length == _pageSize);
+  }
+
+  List<QueryDocumentSnapshot> _currentDocs() {
+    final docs = <QueryDocumentSnapshot>[];
+    if (_filter == 'Questions' || _filter == 'All') {
+      docs.addAll(_questions);
+    }
+    if (_filter == 'Polls' || _filter == 'All') {
+      docs.addAll(_polls);
+    }
+    if (_filter == 'Quizzes' || _filter == 'All') {
+      docs.addAll(_quizzes);
+    }
+    docs.sort((a, b) {
+      final aTs = (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+      final bTs = (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+      if (aTs == null && bTs == null) return 0;
+      if (aTs == null) return 1;
+      if (bTs == null) return -1;
+      return bTs.compareTo(aTs);
+    });
+    return docs;
+  }
+
+  Widget _buildFeedList() {
+    final docs = _currentDocs();
+    if (_loading && docs.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (docs.isEmpty) {
+      return const Center(
+        child: Text(
+          'No posts found',
+          style: TextStyle(color: Colors.grey),
+        ),
+      );
+    }
+    return NotificationListener<UserScrollNotification>(
+      onNotification: (notification) {
+        if (notification.direction == ScrollDirection.reverse && _showChips) {
+          setState(() => _showChips = false);
+        } else if (notification.direction == ScrollDirection.forward &&
+            !_showChips) {
+          setState(() => _showChips = true);
+        }
+        return false;
+      },
+      child: ListView.builder(
+        controller: _scrollCtrl,
+        padding: const EdgeInsets.all(12),
+        itemCount: docs.length + (_loading ? 1 : 0),
+        itemBuilder: (_, i) {
+          if (i >= docs.length) {
+            return const Padding(
+              padding: EdgeInsets.only(top: 12, bottom: 24),
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+          final doc = docs[i];
+          return StreamBuilder<DocumentSnapshot>(
+            stream: doc.reference.snapshots(),
+            builder: (context, snap) {
+              final data =
+                  (snap.data?.data() as Map<String, dynamic>?) ??
+                  (doc.data() as Map<String, dynamic>);
+              return FeedCard(data: data, id: doc.id);
+            },
+          );
+        },
       ),
     );
   }
@@ -237,7 +405,8 @@ class _UserSearchSuggestions extends StatelessWidget {
     final ref = FirebaseFirestore.instance
         .collection('users')
         .orderBy('username')
-        .startAt([q]).endAt(['$q\uf8ff']);
+        .startAt([q])
+        .endAt(['$q\uf8ff']);
 
     return StreamBuilder<QuerySnapshot>(
       stream: ref.limit(10).snapshots(),
@@ -249,10 +418,7 @@ class _UserSearchSuggestions extends StatelessWidget {
         if (docs.isEmpty) {
           return const Padding(
             padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            child: Text(
-              'No users found',
-              style: TextStyle(color: Colors.grey),
-            ),
+            child: Text('No users found', style: TextStyle(color: Colors.grey)),
           );
         }
 
@@ -267,7 +433,9 @@ class _UserSearchSuggestions extends StatelessWidget {
               final uid = docs[i].id;
               final name = (data['name'] ?? '').toString();
               final username = (data['username'] ?? '').toString();
-              final letter = username.isNotEmpty ? username[0].toUpperCase() : 'U';
+              final letter = username.isNotEmpty
+                  ? username[0].toUpperCase()
+                  : 'U';
 
               return ListTile(
                 leading: CircleAvatar(
@@ -282,9 +450,7 @@ class _UserSearchSuggestions extends StatelessWidget {
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (_) => ProfileScreen(uid: uid),
-                    ),
+                    MaterialPageRoute(builder: (_) => ProfileScreen(uid: uid)),
                   );
                 },
               );
@@ -306,8 +472,11 @@ class FeedCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final type = data['type'];
     final collection = type == 'quiz' ? 'quizzes' : '${type}s';
-    final typeLabel =
-        type == 'quiz' ? 'Quiz' : type == 'poll' ? 'Poll' : 'Question';
+    final typeLabel = type == 'quiz'
+        ? 'Quiz'
+        : type == 'poll'
+        ? 'Poll'
+        : 'Question';
     final username = (data['username'] ?? '').toString();
     final safeName = username.isNotEmpty ? username : 'User';
 
@@ -376,7 +545,8 @@ class FeedCard extends StatelessWidget {
             const SizedBox(height: 10),
             Text('Que. ${data['content'] ?? ''}'),
 
-            if (type == 'question') AnswerBox(postId: id),
+            if (type == 'question')
+              AnswerBox(postId: id, ownerUid: data['uid']),
             if (type == 'poll' || type == 'quiz') ...[
               const SizedBox(height: 10),
               const Text(
@@ -389,6 +559,8 @@ class FeedCard extends StatelessWidget {
                 type: type,
                 options: (data['options'] as List?) ?? const [],
                 correctIndex: data['correctIndex'] as int?,
+                ownerUid: data['uid'],
+                content: (data['content'] ?? '').toString(),
               ),
             ],
 
@@ -398,7 +570,12 @@ class FeedCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    LikeButton(postId: id, collection: collection),
+                    LikeButton(
+                      postId: id,
+                      collection: collection,
+                      ownerUid: data['uid'],
+                      content: (data['content'] ?? '').toString(),
+                    ),
                     Text(formatCount(data['likes'] ?? 0)),
                   ],
                 ),
@@ -447,12 +624,16 @@ class _OptionStatsList extends StatelessWidget {
   final String type;
   final List options;
   final int? correctIndex;
+  final String ownerUid;
+  final String content;
 
   const _OptionStatsList({
     required this.postId,
     required this.type,
     required this.options,
     required this.correctIndex,
+    required this.ownerUid,
+    required this.content,
   });
 
   @override
@@ -474,8 +655,10 @@ class _OptionStatsList extends StatelessWidget {
       stream: userRef.snapshots(),
       builder: (context, userSnap) {
         final answered = userSnap.data?.exists ?? false;
-        final selected = (userSnap.data?.data() as Map<String, dynamic>?)?[
-            type == 'quiz' ? 'index' : 'option'];
+        final selected =
+            (userSnap.data?.data() as Map<String, dynamic>?)?[type == 'quiz'
+                ? 'index'
+                : 'option'];
 
         if (!answered) {
           return Column(
@@ -486,10 +669,9 @@ class _OptionStatsList extends StatelessWidget {
                   color: Theme.of(context).colorScheme.surface,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .outline
-                        .withOpacity(0.2),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.outline.withOpacity(0.2),
                   ),
                 ),
                 child: ListTile(
@@ -507,6 +689,23 @@ class _OptionStatsList extends StatelessWidget {
                           .collection('polls')
                           .doc(postId)
                           .update({'answeredCount': FieldValue.increment(1)});
+                    }
+
+                    final myUid = FirebaseAuth.instance.currentUser?.uid;
+                    if (myUid != null && myUid != ownerUid) {
+                      final myName = await _currentUserLabel();
+                      final voteTitle = type == 'quiz'
+                          ? '$myName answered your quiz.'
+                          : '$myName votes on your poll.';
+                      await NotificationHelper.addActivity(
+                        targetUid: ownerUid,
+                        type: 'vote',
+                        title: voteTitle,
+                        actorUid: myUid,
+                        postId: postId,
+                        postType: type,
+                        content: content,
+                      );
                     }
                   },
                 ),
@@ -559,12 +758,9 @@ class _OptionStatsList extends StatelessWidget {
                       : selected == options[i].toString();
                   final fillColor = type == 'quiz'
                       ? (isCorrect
-                          ? Colors.green.withOpacity(0.18)
-                          : Colors.red.withOpacity(0.12))
-                      : Theme.of(context)
-                          .colorScheme
-                          .primary
-                          .withOpacity(0.10);
+                            ? Colors.green.withOpacity(0.18)
+                            : Colors.red.withOpacity(0.12))
+                      : Theme.of(context).colorScheme.primary.withOpacity(0.10);
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 8),
@@ -572,10 +768,9 @@ class _OptionStatsList extends StatelessWidget {
                       color: Theme.of(context).colorScheme.surface,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .outline
-                            .withOpacity(0.2),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.outline.withOpacity(0.2),
                       ),
                     ),
                     child: ClipRRect(
@@ -603,18 +798,18 @@ class _OptionStatsList extends StatelessWidget {
                                           : FontWeight.w400,
                                       color: isCorrect
                                           ? Colors.green
-                                          : Theme.of(context)
-                                              .colorScheme
-                                              .onSurface,
+                                          : Theme.of(
+                                              context,
+                                            ).colorScheme.onSurface,
                                     ),
                                   ),
                                 ),
                                 Text(
                                   '$percent%',
                                   style: TextStyle(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                               ],
@@ -754,7 +949,15 @@ class PollWidget extends StatelessWidget {
 class LikeButton extends StatelessWidget {
   final String postId;
   final String collection;
-  const LikeButton({super.key, required this.postId, required this.collection});
+  final String ownerUid;
+  final String content;
+  const LikeButton({
+    super.key,
+    required this.postId,
+    required this.collection,
+    required this.ownerUid,
+    required this.content,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -782,6 +985,24 @@ class LikeButton extends StatelessWidget {
               liked ? tx.delete(ref) : tx.set(ref, {'uid': uid});
               tx.update(post, {'likes': FieldValue.increment(liked ? -1 : 1)});
             });
+
+            if (!liked && uid != ownerUid) {
+              final myName = await _currentUserLabel();
+              final likeLabel = collection == 'questions'
+                  ? 'question'
+                  : collection == 'polls'
+                  ? 'poll'
+                  : 'quiz';
+              await NotificationHelper.addActivity(
+                targetUid: ownerUid,
+                type: 'like',
+                title: '$myName likes your $likeLabel.',
+                actorUid: uid,
+                postId: postId,
+                postType: collection,
+                content: content,
+              );
+            }
           },
         );
       },
@@ -792,7 +1013,8 @@ class LikeButton extends StatelessWidget {
 // ================= ANSWER =================
 class AnswerBox extends StatefulWidget {
   final String postId;
-  const AnswerBox({super.key, required this.postId});
+  final String ownerUid;
+  const AnswerBox({super.key, required this.postId, required this.ownerUid});
 
   @override
   State<AnswerBox> createState() => _AnswerBoxState();
@@ -832,6 +1054,19 @@ class _AnswerBoxState extends State<AnswerBox> {
                 .collection('questions')
                 .doc(widget.postId)
                 .update({'answeredCount': FieldValue.increment(1)});
+
+            if (uid != widget.ownerUid) {
+              final myName = await _currentUserLabel();
+              await NotificationHelper.addActivity(
+                targetUid: widget.ownerUid,
+                type: 'answer',
+                title: '$myName answered your question.',
+                actorUid: uid,
+                postId: widget.postId,
+                postType: 'question',
+                content: c.text.trim(),
+              );
+            }
             c.clear();
           },
         ),
@@ -897,6 +1132,16 @@ class FollowButton extends StatelessWidget {
               );
             }
             await batch.commit();
+
+            if (!isFollowing && myUid != targetUid) {
+              final myName = await _currentUserLabel();
+              await NotificationHelper.addActivity(
+                targetUid: targetUid,
+                type: 'follow',
+                title: '$myName started followed you',
+                actorUid: myUid,
+              );
+            }
           },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
