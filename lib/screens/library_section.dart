@@ -463,109 +463,171 @@ class _OptionStatsList extends StatelessWidget {
 
     final collection = type == 'quiz' ? 'quizzes' : 'polls';
     final subcollection = type == 'quiz' ? 'attempts' : 'votes';
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final userRef = FirebaseFirestore.instance
+        .collection(collection)
+        .doc(postId)
+        .collection(subcollection)
+        .doc(uid);
 
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection(collection)
-          .doc(postId)
-          .collection(subcollection)
-          .snapshots(),
-      builder: (context, snap) {
-        if (!snap.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    return StreamBuilder<DocumentSnapshot>(
+      stream: userRef.snapshots(),
+      builder: (context, userSnap) {
+        final answered = userSnap.data?.exists ?? false;
+        final selected = (userSnap.data?.data() as Map<String, dynamic>?)?[
+            type == 'quiz' ? 'index' : 'option'];
 
-        final docs = snap.data!.docs;
-        final counts = List<int>.filled(options.length, 0);
-        for (final d in docs) {
-          final data = d.data() as Map<String, dynamic>;
-          if (type == 'quiz') {
-            final index = data['index'];
-            if (index is int && index >= 0 && index < counts.length) {
-              counts[index] += 1;
-            }
-          } else {
-            final option = data['option'];
-            if (option is String) {
-              final idx = options.indexOf(option);
-              if (idx != -1) counts[idx] += 1;
-            }
-          }
-        }
-
-        final total = counts.fold<int>(0, (a, b) => a + b);
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ...List.generate(options.length, (i) {
-              final percent = total == 0
-                  ? 0
-                  : ((counts[i] / total) * 100).round();
-              final isCorrect = type == 'quiz' && correctIndex == i;
-              final fillColor = type == 'quiz'
-                  ? (isCorrect
-                      ? Colors.green.withOpacity(0.18)
-                      : Colors.red.withOpacity(0.12))
-                  : Theme.of(context).colorScheme.primary.withOpacity(0.10);
-
+        if (!answered) {
+          return Column(
+            children: List.generate(options.length, (i) {
               return Container(
                 margin: const EdgeInsets.only(bottom: 8),
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.surface,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.outline.withOpacity(0.2),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .outline
+                        .withOpacity(0.2),
                   ),
                 ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: Stack(
-                    children: [
-                      FractionallySizedBox(
-                        widthFactor: percent / 100,
-                        alignment: Alignment.centerLeft,
-                        child: Container(height: 44, color: fillColor),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                options[i].toString(),
-                                style: TextStyle(
-                                  fontWeight: isCorrect
-                                      ? FontWeight.w600
-                                      : FontWeight.w400,
-                                  color: isCorrect
-                                      ? Theme.of(context).colorScheme.primary
-                                      : Theme.of(context).colorScheme.onSurface,
-                                ),
-                              ),
-                            ),
-                            Text(
-                              '$percent%',
-                              style: TextStyle(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                child: ListTile(
+                  title: Text(options[i].toString()),
+                  onTap: () async {
+                    if (type == 'quiz') {
+                      await userRef.set({'index': i});
+                      await FirebaseFirestore.instance
+                          .collection('quizzes')
+                          .doc(postId)
+                          .update({'answeredCount': FieldValue.increment(1)});
+                    } else {
+                      await userRef.set({'option': options[i].toString()});
+                      await FirebaseFirestore.instance
+                          .collection('polls')
+                          .doc(postId)
+                          .update({'answeredCount': FieldValue.increment(1)});
+                    }
+                  },
                 ),
               );
             }),
-          ],
+          );
+        }
+
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection(collection)
+              .doc(postId)
+              .collection(subcollection)
+              .snapshots(),
+          builder: (context, snap) {
+            if (!snap.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final docs = snap.data!.docs;
+            final counts = List<int>.filled(options.length, 0);
+            for (final d in docs) {
+              final data = d.data() as Map<String, dynamic>;
+              if (type == 'quiz') {
+                final index = data['index'];
+                if (index is int && index >= 0 && index < counts.length) {
+                  counts[index] += 1;
+                }
+              } else {
+                final option = data['option'];
+                if (option is String) {
+                  final idx = options.indexOf(option);
+                  if (idx != -1) counts[idx] += 1;
+                }
+              }
+            }
+
+            final total = counts.fold<int>(0, (a, b) => a + b);
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ...List.generate(options.length, (i) {
+                  final percent = total == 0
+                      ? 0
+                      : ((counts[i] / total) * 100).round();
+                  final isCorrect = type == 'quiz' && correctIndex == i;
+                  final isSelected = type == 'quiz'
+                      ? selected == i
+                      : selected == options[i].toString();
+                  final fillColor = type == 'quiz'
+                      ? (isCorrect
+                          ? Colors.green.withOpacity(0.18)
+                          : Colors.red.withOpacity(0.12))
+                      : Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withOpacity(0.10);
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .outline
+                            .withOpacity(0.2),
+                      ),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Stack(
+                        children: [
+                          FractionallySizedBox(
+                            widthFactor: percent / 100,
+                            alignment: Alignment.centerLeft,
+                            child: Container(height: 44, color: fillColor),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    options[i].toString(),
+                                    style: TextStyle(
+                                      fontWeight: isSelected
+                                          ? FontWeight.w600
+                                          : FontWeight.w400,
+                                      color: isCorrect
+                                          ? Colors.green
+                                          : Theme.of(context)
+                                              .colorScheme
+                                              .onSurface,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  '$percent%',
+                                  style: TextStyle(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+              ],
+            );
+          },
         );
       },
     );
