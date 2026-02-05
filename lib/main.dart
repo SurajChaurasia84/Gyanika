@@ -3,13 +3,14 @@ import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-
 import 'firebase_options.dart';
 import 'screens/main_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/email_verification_screen.dart';
+import 'helpers/in_app_notification_service.dart';
 
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.system);
+final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -50,6 +51,7 @@ class GyanikaApp extends StatelessWidget {
           debugShowCheckedModeBanner: false,
           title: 'Gyanika',
           themeMode: themeMode,
+          navigatorKey: appNavigatorKey,
 
           // ☀️ LIGHT
           theme: ThemeData(
@@ -99,13 +101,21 @@ class AuthGate extends StatelessWidget {
         final user = snapshot.data;
 
         if (user == null) {
+          InAppNotificationService.dispose();
           // ❌ Not logged in → Login Screen
           return const LoginScreen();
         } else if (!user.emailVerified) {
+          InAppNotificationService.dispose();
           // ⚠️ Logged in but email not verified → Email Verification Screen
           return EmailVerificationScreen(user: user);
         } else {
           // ✅ Logged in & email verified → MainScreen
+          Future.microtask(() {
+            InAppNotificationService.init(
+              navigatorKey: appNavigatorKey,
+              uid: user.uid,
+            );
+          });
           return const MainScreen();
         }
       },
