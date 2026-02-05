@@ -310,7 +310,7 @@ class _HomeSectionState extends State<HomeSection> {
         final docs = snap.data!.docs;
         if (docs.isEmpty) return const SizedBox.shrink();
 
-        final visible = docs.take(2).toList();
+        final visible = docs.take(8).toList();
         final showAll = docs.length > visible.length;
 
         return Column(
