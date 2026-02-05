@@ -7,6 +7,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:gyanika/helpers/notification_helper.dart';
 
 // ================= COMMON CATEGORY DROPDOWN =================
 const List<String> kCategories = [
@@ -48,6 +49,50 @@ Future<void> incrementUserPostsCount() async {
   });
 }
 
+Future<List<String>> _fetchFollowerIds(String uid) async {
+  final snap = await FirebaseFirestore.instance
+      .collection('users')
+      .doc(uid)
+      .collection('followers')
+      .get();
+  return snap.docs.map((d) => d.id).toList();
+}
+
+Future<String> _currentUserLabel() async {
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+  if (uid == null) return 'Someone';
+  final snap =
+      await FirebaseFirestore.instance.collection('users').doc(uid).get();
+  final data = snap.data() ?? {};
+  final name = (data['name'] ?? '').toString().trim();
+  if (name.isNotEmpty) return name;
+  final username = (data['username'] ?? '').toString().trim();
+  if (username.isNotEmpty) return username;
+  return 'Someone';
+}
+
+Future<void> _notifyFollowersNewPost({
+  required String postId,
+  required String postType,
+  required String content,
+}) async {
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+  if (uid == null) return;
+  final followers = await _fetchFollowerIds(uid);
+  if (followers.isEmpty) return;
+
+  final myName = await _currentUserLabel();
+  await NotificationHelper.addActivitiesForUsers(
+    targetUids: followers,
+    type: 'new_post',
+    title: '$myName posted a new $postType.',
+    actorUid: uid,
+    postId: postId,
+    postType: postType,
+    content: content,
+  );
+}
+
 // ================= ADD QUESTION SCREEN =================
 class AddQuestionScreen extends StatefulWidget {
   const AddQuestionScreen({super.key});
@@ -66,7 +111,7 @@ class _AddQuestionScreenState extends State<AddQuestionScreen> {
 
     setState(() => loading = true);
 
-    await FirebaseFirestore.instance.collection('questions').add(
+    final doc = await FirebaseFirestore.instance.collection('questions').add(
           basePostData(
             type: 'question',
             content: _controller.text.trim(),
@@ -74,6 +119,11 @@ class _AddQuestionScreenState extends State<AddQuestionScreen> {
           ),
         );
     await incrementUserPostsCount();
+    await _notifyFollowersNewPost(
+      postId: doc.id,
+      postType: 'question',
+      content: _controller.text.trim(),
+    );
 
     if (!mounted) return;
     Navigator.pop(context);
@@ -136,7 +186,7 @@ class _AddPollScreenState extends State<AddPollScreen> {
   Future<void> submit() async {
     if (questionCtrl.text.isEmpty || _category == null) return;
 
-    await FirebaseFirestore.instance.collection('polls').add({
+    final doc = await FirebaseFirestore.instance.collection('polls').add({
       ...basePostData(
         type: 'poll',
         content: questionCtrl.text.trim(),
@@ -147,6 +197,11 @@ class _AddPollScreenState extends State<AddPollScreen> {
       'answeredCount': 0,
     });
     await incrementUserPostsCount();
+    await _notifyFollowersNewPost(
+      postId: doc.id,
+      postType: 'poll',
+      content: questionCtrl.text.trim(),
+    );
 
     if (!mounted) return;
     Navigator.pop(context);
@@ -219,7 +274,7 @@ class _AddQuizScreenState extends State<AddQuizScreen> {
     if (questionCtrl.text.isEmpty || correctIndex == null || _category == null)
       return;
 
-    await FirebaseFirestore.instance.collection('quizzes').add({
+    final doc = await FirebaseFirestore.instance.collection('quizzes').add({
       ...basePostData(
         type: 'quiz',
         content: questionCtrl.text.trim(),
@@ -230,6 +285,11 @@ class _AddQuizScreenState extends State<AddQuizScreen> {
       'attemptedCount': 0,
     });
     await incrementUserPostsCount();
+    await _notifyFollowersNewPost(
+      postId: doc.id,
+      postType: 'quiz',
+      content: questionCtrl.text.trim(),
+    );
 
     if (!mounted) return;
     Navigator.pop(context);
