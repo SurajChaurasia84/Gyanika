@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gyanika/screens/notification_screen.dart';
 import 'package:gyanika/screens/preference_screen.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -187,12 +188,60 @@ class _HomeSectionState extends State<HomeSection> {
           ],
         ),
         actions: [
-          IconButton(
-            onPressed: () {},
-            icon: Icon(
-              Iconsax.notification,
-              color: theme.colorScheme.onSurface,
-            ),
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('users')
+                .doc(uid)
+                .collection('activities')
+                .where('read', isEqualTo: false)
+                .snapshots(),
+            builder: (context, snap) {
+              final hasUnread = (snap.data?.docs.length ?? 0) > 0;
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  IconButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        PageRouteBuilder(
+                          transitionDuration:
+                              const Duration(milliseconds: 250),
+                          pageBuilder: (_, _, _) =>
+                              const NotificationScreen(),
+                          transitionsBuilder: (_, animation, _, child) {
+                            return FadeTransition(
+                              opacity: CurvedAnimation(
+                                parent: animation,
+                                curve: Curves.easeInOut,
+                              ),
+                              child: child,
+                            );
+                          },
+                        ),
+                      );
+                    },
+                    icon: Icon(
+                      Iconsax.notification,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
+                  if (hasUnread)
+                    Positioned(
+                      top: 10,
+                      right: 10,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
           ),
           IconButton(
             onPressed: () {
