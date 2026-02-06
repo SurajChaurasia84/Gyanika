@@ -33,10 +33,7 @@ class SettingsScreen extends StatelessWidget {
   }
 
   /// 🔑 CHANGE PASSWORD CONFIRM
-  Future<void> _confirmPasswordReset(
-    BuildContext context,
-    String email,
-  ) async {
+  Future<void> _confirmPasswordReset(BuildContext context, String email) async {
     final result = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -96,15 +93,14 @@ class SettingsScreen extends StatelessWidget {
     );
 
     if (result == true && controller.text.trim().isNotEmpty) {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .update({'name': controller.text.trim()});
+      await FirebaseFirestore.instance.collection('users').doc(uid).update({
+        'name': controller.text.trim(),
+      });
 
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Name updated')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Name updated')));
     }
   }
 
@@ -152,17 +148,6 @@ class SettingsScreen extends StatelessWidget {
             icon: Icons.verified_user_outlined,
             title: 'Email Verified',
             subtitle: user.emailVerified ? 'Yes' : 'No',
-          ),
-
-          const SizedBox(height: 24),
-
-          /// 🔔 PREFERENCES
-          _sectionTitle('Preferences'),
-
-          _settingTile(
-            icon: Icons.notifications_none,
-            title: 'Notifications',
-            subtitle: 'Manage alerts & reminders',
           ),
 
           const SizedBox(height: 24),
