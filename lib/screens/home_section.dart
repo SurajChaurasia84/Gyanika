@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:gyanika/screens/notification_screen.dart';
 import 'package:gyanika/screens/preference_screen.dart';
@@ -21,6 +23,9 @@ class HomeSection extends StatefulWidget {
 
 class _HomeSectionState extends State<HomeSection> {
   final String uid = FirebaseAuth.instance.currentUser!.uid;
+  late final Box _settingsBox;
+  StreamSubscription<DocumentSnapshot>? _userSub;
+  String _streamText = 'Select Stream';
 
   Stream<QuerySnapshot> recommendedCoursesStream() {
     return FirebaseFirestore.instance
@@ -34,6 +39,35 @@ class _HomeSectionState extends State<HomeSection> {
   @override
   void initState() {
     super.initState();
+    _settingsBox = Hive.box('settings');
+    final cached = _settingsBox.get('preference_stream');
+    if (cached is String && cached.trim().isNotEmpty) {
+      _streamText = cached;
+    }
+    _userSub = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .snapshots()
+        .listen((snap) {
+      if (!snap.exists) return;
+      final data = snap.data() ?? {};
+      final pref = (data['preferenceStream'] ?? '').toString().trim();
+      final next = pref.isNotEmpty ? pref : 'Select Stream';
+      if (next != _streamText) {
+        if (mounted) {
+          setState(() => _streamText = next);
+        } else {
+          _streamText = next;
+        }
+        _settingsBox.put('preference_stream', next);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _userSub?.cancel();
+    super.dispose();
   }
 
   @override
@@ -116,73 +150,55 @@ class _HomeSectionState extends State<HomeSection> {
 
             const SizedBox(width: 10),
 
-            /// STREAM SELECTOR (Firestore Connected)
-            StreamBuilder<DocumentSnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(uid)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                String streamText = 'Select Stream';
-
-                if (snapshot.hasData && snapshot.data!.data() != null) {
-                  final data = snapshot.data!.data() as Map<String, dynamic>;
-                  if (data['preferenceStream'] != null &&
-                      data['preferenceStream'].toString().isNotEmpty) {
-                    streamText = data['preferenceStream'];
-                  }
-                }
-
-                return GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      PageRouteBuilder(
-                        transitionDuration: const Duration(milliseconds: 250),
-                        pageBuilder: (_, _, _) => const PreferenceScreen(),
-                        transitionsBuilder: (_, animation, _, child) {
-                          return FadeTransition(
-                            opacity: CurvedAnimation(
-                              parent: animation,
-                              curve: Curves.easeInOut,
-                            ),
-                            child: child,
-                          );
-                        },
-                      ),
-                    );
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: theme.dividerColor),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          streamText,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: theme.colorScheme.onSurface,
-                          ),
+            /// STREAM SELECTOR (Cached locally, updated from Firestore)
+            GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  PageRouteBuilder(
+                    transitionDuration: const Duration(milliseconds: 250),
+                    pageBuilder: (_, _, _) => const PreferenceScreen(),
+                    transitionsBuilder: (_, animation, _, child) {
+                      return FadeTransition(
+                        opacity: CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeInOut,
                         ),
-                        const SizedBox(width: 4),
-                        Icon(
-                          Iconsax.arrow_down_1,
-                          size: 16,
-                          color: theme.hintColor,
-                        ),
-                      ],
-                    ),
+                        child: child,
+                      );
+                    },
                   ),
                 );
               },
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: theme.dividerColor),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _streamText,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Iconsax.arrow_down_1,
+                      size: 16,
+                      color: theme.hintColor,
+                    ),
+                  ],
+                ),
+              ),
             ),
 
           ],
