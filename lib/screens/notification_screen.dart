@@ -188,6 +188,7 @@ class _NotificationTile extends StatelessWidget {
     final postId = (data['postId'] ?? '').toString();
     final postType = (data['postType'] ?? '').toString();
     final preview = (data['content'] ?? data['postContent'] ?? '').toString();
+    final type = (data['type'] ?? '').toString();
 
     return InkWell(
       onTap: () {
@@ -218,7 +219,7 @@ class _NotificationTile extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 10),
         child: Row(
           children: [
-            const Icon(Icons.notifications, size: 18),
+            Icon(_activityIcon(type), size: 18),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -329,6 +330,21 @@ String _titleFromPostType(String postType) {
   if (type.contains('quiz')) return 'Quiz';
   if (type.contains('poll')) return 'Poll';
   return 'Post';
+}
+
+IconData _activityIcon(String type) {
+  switch (type) {
+    case 'like':
+      return Icons.favorite_outline;
+    case 'answer':
+      return Icons.question_answer_outlined;
+    case 'vote':
+      return Icons.how_to_vote_outlined;
+    case 'follow':
+      return Icons.person_add_alt_1_outlined;
+    default:
+      return Icons.notifications;
+  }
 }
 
 class _NotificationPreview extends StatelessWidget {
