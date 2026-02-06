@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'appearance_screen.dart';
 import 'activity_screen.dart';
-import 'help_&_support.dart';
+import 'help_n_support.dart';
 import 'settings_screen.dart';
 import 'my_profile.dart';
 
