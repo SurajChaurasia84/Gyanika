@@ -3,9 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'appearance_screen.dart';
-import 'my_dashboard.dart';
 import 'activity_screen.dart';
-import 'advanced_screen.dart';
+import 'help_&_support.dart';
 import 'settings_screen.dart';
 import 'my_profile.dart';
 
@@ -89,14 +88,7 @@ class YourProfileScreen extends StatelessWidget {
               ),
 
               const SizedBox(height: 30),
-
-              _navTile(
-                context,
-                icon: Icons.dashboard_outlined,
-                title: 'Dashboard',
-                screen: const MyDashboardScreen(),
-              ),
-
+              
               _navTile(
                 context,
                 icon: Icons.bookmark_border,
@@ -113,9 +105,9 @@ class YourProfileScreen extends StatelessWidget {
 
               _navTile(
                 context,
-                icon: Icons.tune,
-                title: 'Advanced',
-                screen: const AdvancedScreen(),
+                icon: Icons.support_agent_outlined,
+                title: 'Help & Support',
+                screen: const HelpSupportFeedbackScreen(),
               ),
 
               _navTile(
