@@ -20,6 +20,8 @@ class ActivityScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
         title: const Text('My Activity'),
       ),
       body: StreamBuilder<QuerySnapshot>(
