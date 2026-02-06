@@ -13,6 +13,8 @@ class AppearanceScreen extends StatelessWidget {
     themeNotifier.value = mode;
 
     final box = Hive.box('settings');
+    final followSystem = mode == ThemeMode.system;
+    await box.put('theme_follow_system', followSystem);
     await box.put(
       'theme_mode',
       mode == ThemeMode.light
