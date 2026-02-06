@@ -25,13 +25,19 @@ void main() async {
   await Hive.openBox('messages');
   final settingsBox = await Hive.openBox('settings');
 
-  // 🎨 Load saved theme
+  // 🎨 Load saved theme (persisted locally)
+  final followSystem =
+      settingsBox.get('theme_follow_system', defaultValue: true) as bool;
   final savedTheme = settingsBox.get('theme_mode', defaultValue: 'system');
-  themeNotifier.value = switch (savedTheme) {
-    'light' => ThemeMode.light,
-    'dark' => ThemeMode.dark,
-    _ => ThemeMode.system,
-  };
+  if (followSystem) {
+    themeNotifier.value = ThemeMode.system;
+  } else {
+    themeNotifier.value = switch (savedTheme) {
+      'light' => ThemeMode.light,
+      'dark' => ThemeMode.dark,
+      _ => ThemeMode.light,
+    };
+  }
 
   // 🔒 Edge-to-edge
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
