@@ -26,6 +26,7 @@ class _HomeSectionState extends State<HomeSection> {
   late final Box _settingsBox;
   StreamSubscription<DocumentSnapshot>? _userSub;
   String _streamText = 'Select Stream';
+  String _profileLetter = '?';
 
   Stream<QuerySnapshot> recommendedCoursesStream() {
     return FirebaseFirestore.instance
@@ -44,6 +45,10 @@ class _HomeSectionState extends State<HomeSection> {
     if (cached is String && cached.trim().isNotEmpty) {
       _streamText = cached;
     }
+    final cachedLetter = _settingsBox.get('profile_letter');
+    if (cachedLetter is String && cachedLetter.trim().isNotEmpty) {
+      _profileLetter = cachedLetter;
+    }
     _userSub = FirebaseFirestore.instance
         .collection('users')
         .doc(uid)
@@ -60,6 +65,19 @@ class _HomeSectionState extends State<HomeSection> {
           _streamText = next;
         }
         _settingsBox.put('preference_stream', next);
+      }
+
+      final name = (data['name'] ?? '').toString().trim();
+      final username = (data['username'] ?? '').toString().trim();
+      final display = name.isNotEmpty ? name : username;
+      final letter = display.isNotEmpty ? display[0].toUpperCase() : '?';
+      if (letter != _profileLetter) {
+        if (mounted) {
+          setState(() => _profileLetter = letter);
+        } else {
+          _profileLetter = letter;
+        }
+        _settingsBox.put('profile_letter', letter);
       }
     });
   }
@@ -107,44 +125,25 @@ class _HomeSectionState extends State<HomeSection> {
                 );
               },
 
-              child: StreamBuilder<DocumentSnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(uid)
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  String letter = '?';
-
-                  if (snapshot.hasData && snapshot.data!.exists) {
-                    final data = snapshot.data!.data() as Map<String, dynamic>;
-                    final name = (data['name'] ?? '').toString().trim();
-
-                    if (name.isNotEmpty) {
-                      letter = name[0].toUpperCase();
-                    }
-                  }
-
-                  return Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: theme.colorScheme.primary.withOpacity(0.12),
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: theme.colorScheme.primary.withOpacity(0.12),
+                ),
+                child: CircleAvatar(
+                  radius: 16,
+                  backgroundColor: theme.colorScheme.primary.withOpacity(
+                    0.15,
+                  ),
+                  child: Text(
+                    _profileLetter,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.primary,
                     ),
-                    child: CircleAvatar(
-                      radius: 16,
-                      backgroundColor: theme.colorScheme.primary.withOpacity(
-                        0.15,
-                      ),
-                      child: Text(
-                        letter,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                    ),
-                  );
-                },
+                  ),
+                ),
               ),
             ),
 
