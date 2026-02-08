@@ -99,7 +99,7 @@ class _ExploreSectionState extends State<ExploreSection> {
                   ),
                   onChanged: (_) => setState(() {}),
                 )
-              : const Text('Explore'),
+              : const Text('Library'),
           actions: [
             IconButton(
               icon: Icon(isSearching ? Icons.close : Icons.search),
