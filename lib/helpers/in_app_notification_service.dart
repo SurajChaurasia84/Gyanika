@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:hive/hive.dart';
 
 class InAppNotificationService {
   static StreamSubscription<QuerySnapshot>? _sub;
@@ -48,6 +49,10 @@ class InAppNotificationService {
     GlobalKey<NavigatorState> navigatorKey,
     String title,
   ) {
+    final enabled = Hive.box('settings')
+        .get('in_app_notifications', defaultValue: true);
+    if (enabled is bool && !enabled) return;
+
     final overlay = navigatorKey.currentState?.overlay;
     if (overlay == null) return;
 
