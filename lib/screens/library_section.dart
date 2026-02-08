@@ -76,7 +76,7 @@ class _LibrarySectionState extends State<LibrarySection> {
                 ),
                 onChanged: (_) => setState(() {}),
               )
-            : const Text('Feed'),
+            : const Text('Explore'),
         actions: [
           IconButton(
             icon: Icon(_isSearching ? Icons.close : Icons.search),
