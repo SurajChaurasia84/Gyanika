@@ -1,11 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:hive/hive.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
-  /// 🔴 LOGOUT CONFIRM
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  bool _inAppEnabled = true;
+
+  @override
+  void initState() {
+    super.initState();
+    final box = Hive.box('settings');
+    final saved = box.get('in_app_notifications', defaultValue: true);
+    if (saved is bool) {
+      _inAppEnabled = saved;
+    }
+  }
+
   Future<void> _confirmLogout(BuildContext context) async {
     final result = await showDialog<bool>(
       context: context,
@@ -32,7 +49,7 @@ class SettingsScreen extends StatelessWidget {
     }
   }
 
-  /// 🔑 CHANGE PASSWORD CONFIRM
+  ///  CHANGE PASSWORD CONFIRM
   Future<void> _confirmPasswordReset(BuildContext context, String email) async {
     final result = await showDialog<bool>(
       context: context,
@@ -148,6 +165,28 @@ class SettingsScreen extends StatelessWidget {
             icon: Icons.verified_user_outlined,
             title: 'Email Verified',
             subtitle: user.emailVerified ? 'Yes' : 'No',
+          ),
+
+          const SizedBox(height: 24),
+
+          _sectionTitle('In-App Updates'),
+
+          ListTile(
+            leading: const Icon(Icons.notifications_outlined),
+            title: const Text('Notifications'),
+            subtitle: const Text('Turn on to recieve Updates'),
+            trailing: Switch(
+              value: _inAppEnabled,
+              onChanged: (value) {
+                setState(() => _inAppEnabled = value);
+                Hive.box('settings').put('in_app_notifications', value);
+              },
+            ),
+            onTap: () {
+              final next = !_inAppEnabled;
+              setState(() => _inAppEnabled = next);
+              Hive.box('settings').put('in_app_notifications', next);
+            },
           ),
 
           const SizedBox(height: 24),
