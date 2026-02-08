@@ -44,6 +44,8 @@ dependencies:
   firebase_auth: ^6.1.4
   cloud_firestore: ^6.1.2
   google_sign_in: ^7.2.0
+  audioplayers: ^6.5.1
+  vibration: ^3.1.5
 
 dev_dependencies:
   flutter_test:
@@ -93,6 +95,7 @@ flutter:
     - assets/src/electronics.png
     - assets/src/reasoning.png
     - assets/src/language.png
+    - assets/bgs/ian.mp3
 
   # To add assets to your application, add an assets section, like this:
   # assets:
