@@ -924,6 +924,19 @@ class _SearchAllScreenState extends State<SearchAllScreen> {
         length: 5,
         child: Column(
           children: [
+            if (q.isEmpty && _history.isEmpty)
+              const Expanded(
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: Padding(
+                    padding: EdgeInsets.only(top: 16),
+                    child: Text(
+                      'No recent searches',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  ),
+                ),
+              ),
             if (q.isEmpty && _history.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
@@ -1034,7 +1047,18 @@ class _UserResults extends StatelessWidget {
       builder: (context, snap) {
         if (!snap.hasData) return const SizedBox.shrink();
         final docs = snap.data!.docs;
-        if (docs.isEmpty) return const SizedBox.shrink();
+        if (docs.isEmpty) {
+          return const Align(
+            alignment: Alignment.topCenter,
+            child: Padding(
+              padding: EdgeInsets.only(top: 16),
+              child: Text(
+                'No searches found',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+          );
+        }
 
         return ListView.builder(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
@@ -1100,7 +1124,18 @@ class _ExploreResults extends StatelessWidget {
   Widget build(BuildContext context) {
     if (query.isEmpty) return const SizedBox.shrink();
     final data = streams;
-    if (data.isEmpty) return const SizedBox.shrink();
+    if (data.isEmpty) {
+      return const Align(
+        alignment: Alignment.topCenter,
+        child: Padding(
+          padding: EdgeInsets.only(top: 16),
+          child: Text(
+            'No searches found',
+            style: TextStyle(color: Colors.grey),
+          ),
+        ),
+      );
+    }
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
@@ -1217,7 +1252,7 @@ class _CategoryResults extends StatelessWidget {
   final String collection;
   const _CategoryResults({required this.query, required this.collection});
 
-  Future<List<Map<String, dynamic>>> _fetchMatches() async {
+  Future<List<QueryDocumentSnapshot>> _fetchMatches() async {
     if (query.isEmpty) return [];
 
     final lower = query.toLowerCase();
@@ -1227,8 +1262,9 @@ class _CategoryResults extends StatelessWidget {
         .limit(30)
         .get();
 
-    return snap.docs.map((d) => d.data()).where((d) {
-      final content = (d['content'] ?? '').toString().toLowerCase();
+    return snap.docs.where((d) {
+      final data = d.data();
+      final content = (data['content'] ?? '').toString().toLowerCase();
       return content.contains(lower);
     }).toList();
   }
@@ -1236,35 +1272,62 @@ class _CategoryResults extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (query.isEmpty) return const SizedBox.shrink();
-    return FutureBuilder<List<Map<String, dynamic>>>(
+    return FutureBuilder<List<QueryDocumentSnapshot>>(
       future: _fetchMatches(),
       builder: (context, snap) {
         if (!snap.hasData) return const SizedBox.shrink();
         final items = snap.data!;
-        if (items.isEmpty) return const SizedBox.shrink();
+        if (items.isEmpty) {
+          return const Align(
+            alignment: Alignment.topCenter,
+            child: Padding(
+              padding: EdgeInsets.only(top: 16),
+              child: Text(
+                'No searches found',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+          );
+        }
 
         return ListView.builder(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           itemCount: items.length,
           itemBuilder: (context, i) {
-            final item = items[i];
+            final doc = items[i];
+            final item = doc.data() as Map<String, dynamic>;
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.outline.withOpacity(0.2),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => PostDetailScreen(
+                        postId: doc.id,
+                        collection: collection,
+                        type: _labelForCollection(collection),
+                      ),
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.outline.withOpacity(0.2),
+                    ),
                   ),
-                ),
-                child: Text(
-                  (item['content'] ?? '').toString(),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                  child: Text(
+                    (item['content'] ?? '').toString(),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
             );
@@ -1273,4 +1336,11 @@ class _CategoryResults extends StatelessWidget {
       },
     );
   }
+}
+
+String _labelForCollection(String collection) {
+  if (collection == 'questions') return 'Question';
+  if (collection == 'quizzes') return 'Quiz';
+  if (collection == 'polls') return 'Poll';
+  return 'Post';
 }
