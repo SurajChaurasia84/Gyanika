@@ -3,11 +3,14 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:vibration/vibration.dart';
 
 class InAppNotificationService {
   static StreamSubscription<QuerySnapshot>? _sub;
   static bool _initialized = false;
   static bool _skipFirstSnapshot = true;
+  static final AudioPlayer _player = AudioPlayer();
 
   static void init({
     required GlobalKey<NavigatorState> navigatorKey,
@@ -53,6 +56,8 @@ class InAppNotificationService {
         .get('in_app_notifications', defaultValue: true);
     if (enabled is bool && !enabled) return;
 
+    _playAlert();
+
     final overlay = navigatorKey.currentState?.overlay;
     if (overlay == null) return;
 
@@ -67,6 +72,28 @@ class InAppNotificationService {
     );
 
     overlay.insert(entry);
+  }
+
+  static Future<void> _playAlert() async {
+    try {
+      final soundEnabled = Hive.box('settings')
+          .get('in_app_sound', defaultValue: true);
+      if (soundEnabled is bool && soundEnabled) {
+        await _player.stop();
+        await _player.play(AssetSource('bgs/ian.mp3'));
+      }
+    } catch (_) {}
+
+    try {
+      final vibrationEnabled = Hive.box('settings')
+          .get('in_app_vibration', defaultValue: true);
+      if (vibrationEnabled is bool && vibrationEnabled) {
+        final hasVibrator = await Vibration.hasVibrator();
+        if (hasVibrator == true) {
+          Vibration.vibrate(duration: 120);
+        }
+      }
+    } catch (_) {}
   }
 }
 
