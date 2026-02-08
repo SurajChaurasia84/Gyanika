@@ -8,7 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hive/hive.dart';
 
-import 'your_profile_screen.dart';
+import 'my_profile_screen.dart';
 import 'course_detail_screen.dart';
 import 'explore_section.dart';
 import 'subject_feed_screen.dart';
@@ -111,7 +111,7 @@ class _HomeSectionState extends State<HomeSection> {
                   context,
                   PageRouteBuilder(
                     transitionDuration: const Duration(milliseconds: 250),
-                    pageBuilder: (_, _, _) => const YourProfileScreen(),
+                    pageBuilder: (_, _, _) => const MyProfileScreen(),
                     transitionsBuilder: (_, animation, _, child) {
                       return FadeTransition(
                         opacity: CurvedAnimation(
