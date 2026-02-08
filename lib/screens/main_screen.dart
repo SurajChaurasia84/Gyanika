@@ -69,13 +69,13 @@ class _MainScreenState extends State<MainScreen> {
               icon: _currentIndex == 1
                   ? const Icon(Iconsax.clipboard5, size: 30)
                   : const Icon(Iconsax.clipboard, size: 25),
-              label: 'Explore',
+              label: 'Library',
             ),
             BottomNavigationBarItem(
               icon: _currentIndex == 2
                   ? const Icon(Iconsax.layer5, size: 30)
                   : const Icon(Iconsax.layer, size: 25),
-              label: 'Library',
+              label: 'Explore',
             ),
             BottomNavigationBarItem(
               icon: _currentIndex == 3
