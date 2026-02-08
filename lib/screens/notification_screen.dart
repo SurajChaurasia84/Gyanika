@@ -3,6 +3,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import 'profile_screen.dart';
+import 'my_profile_screen.dart';
+import 'package:hive/hive.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
 class NotificationScreen extends StatefulWidget {
   const NotificationScreen({super.key});
@@ -17,6 +20,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
   DocumentSnapshot? _lastDoc;
   bool _loading = false;
   bool _hasMore = true;
+  bool _showToggleBanner = true;
 
   @override
   void initState() {
@@ -99,37 +103,147 @@ class _NotificationScreenState extends State<NotificationScreen> {
     if (user == null) {
       return const Scaffold(body: Center(child: Text('User not logged in')));
     }
-
     return Scaffold(
       appBar: AppBar(
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         title: const Text('Notifications'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () {
+              Navigator.push(
+                context,
+                PageRouteBuilder(
+                  transitionDuration: const Duration(milliseconds: 250),
+                  pageBuilder: (_, animation, __) => FadeTransition(
+                    opacity:
+                        CurvedAnimation(parent: animation, curve: Curves.easeInOut),
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0.03, 0),
+                        end: Offset.zero,
+                      ).animate(
+                        CurvedAnimation(parent: animation, curve: Curves.easeOut),
+                      ),
+                      child: const NotificationsScreen(),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
       ),
-      body: _items.isEmpty && _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _items.isEmpty
-              ? const Center(child: Text('No notifications yet'))
-              : NotificationListener<ScrollNotification>(
-                  onNotification: (notification) {
-                    if (notification.metrics.pixels >=
-                        notification.metrics.maxScrollExtent - 200) {
-                      _loadMore();
-                    }
-                    return false;
-                  },
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                    children: [
-                      ..._buildGroupedList(_items),
-                      if (_loading)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 12),
-                          child: Center(child: CircularProgressIndicator()),
+      body: Column(
+        children: [
+          ValueListenableBuilder<Box>(
+            valueListenable:
+                Hive.box('settings').listenable(keys: ['in_app_notifications']),
+            builder: (context, box, _) {
+              final notifyEnabled =
+                  box.get('in_app_notifications', defaultValue: true) as bool;
+              if (notifyEnabled || !_showToggleBanner) {
+                return const SizedBox.shrink();
+              }
+              return InkWell(
+                borderRadius: BorderRadius.circular(10),
+                splashColor: Colors.transparent,
+                highlightColor: Colors.transparent,
+                hoverColor: Colors.transparent,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    PageRouteBuilder(
+                      transitionDuration: const Duration(milliseconds: 250),
+                      pageBuilder: (_, animation, __) => FadeTransition(
+                        opacity: CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeInOut,
                         ),
+                        child: SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(0.03, 0),
+                            end: Offset.zero,
+                          ).animate(
+                            CurvedAnimation(
+                              parent: animation,
+                              curve: Curves.easeOut,
+                            ),
+                          ),
+                          child: const NotificationsScreen(),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+                child: Container(
+                  margin: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .outline
+                          .withOpacity(0.2),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Turn on notifications to receive updates',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 18),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: () {
+                          setState(() => _showToggleBanner = false);
+                        },
+                      ),
                     ],
                   ),
                 ),
+              );
+            },
+          ),
+          Expanded(
+            child: _items.isEmpty && _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _items.isEmpty
+                    ? const Center(child: Text('No notifications yet'))
+                    : NotificationListener<ScrollNotification>(
+                        onNotification: (notification) {
+                          if (notification.metrics.pixels >=
+                              notification.metrics.maxScrollExtent - 200) {
+                            _loadMore();
+                          }
+                          return false;
+                        },
+                        child: ListView(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                          children: [
+                            ..._buildGroupedList(_items),
+                            if (_loading)
+                              const Padding(
+                                padding: EdgeInsets.only(top: 12),
+                                child:
+                                    Center(child: CircularProgressIndicator()),
+                              ),
+                          ],
+                        ),
+                      ),
+          ),
+        ],
+      ),
     );
   }
 }
