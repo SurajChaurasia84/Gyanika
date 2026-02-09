@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:hive/hive.dart';
 
-class SubjectScreen extends StatelessWidget {
+class SubjectScreen extends StatefulWidget {
   final String subjectName;
   final String stream;
 
@@ -11,71 +12,104 @@ class SubjectScreen extends StatelessWidget {
   });
 
   @override
+  State<SubjectScreen> createState() => _SubjectScreenState();
+}
+
+class _SubjectScreenState extends State<SubjectScreen> {
+  static const totalLevels = 5;
+  int currentLevel = 1;
+  final Set<int> completedLevels = <int>{};
+  Box? _progressBox;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProgress();
+  }
+
+  String get _progressKeyPrefix =>
+      '${widget.subjectName}_${widget.stream}'.toLowerCase();
+
+  Future<void> _loadProgress() async {
+    final box = await Hive.openBox('progress');
+    _progressBox = box;
+    final storedCompleted =
+        box.get('completed_$_progressKeyPrefix', defaultValue: <int>[]);
+    final storedCurrent =
+        box.get('current_$_progressKeyPrefix', defaultValue: 1);
+
+    if (!mounted) return;
+    setState(() {
+      completedLevels
+        ..clear()
+        ..addAll(List<int>.from(storedCompleted as List));
+      currentLevel = (storedCurrent as int).clamp(1, totalLevels);
+    });
+  }
+
+  Future<void> _saveProgress() async {
+    final box = _progressBox ?? await Hive.openBox('progress');
+    await box.put('completed_$_progressKeyPrefix', completedLevels.toList());
+    await box.put('current_$_progressKeyPrefix', currentLevel);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final showWelcomeImage = subjectName.toUpperCase() == 'ABCD';
+    final showWelcomeImage = widget.subjectName.toUpperCase() == 'ABCD';
     final isAbcd = showWelcomeImage;
-    const totalLevels = 5;
-    const currentLevel = 1;
-    const completedLevels = <int>{};
     return Scaffold(
       appBar: AppBar(
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        title: Text(subjectName),
+        title: Text(widget.subjectName),
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        children: [
-          if (showWelcomeImage)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: AspectRatio(
-                aspectRatio: 1920 / 480,
-                child: Image.asset(
-                  'assets/src/wl.png',
-                  fit: BoxFit.cover,
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          children: [
+            if (showWelcomeImage)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: AspectRatio(
+                  aspectRatio: 1920 / 480,
+                  child: Image.asset('assets/src/wl.png', fit: BoxFit.cover),
                 ),
               ),
-            ),
-          if (isAbcd) ...[
-            const SizedBox(height: 16),
-            Text(
-              'Choose Your Level',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'Complete level to unlock next level!',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-            const SizedBox(height: 14),
-            _LevelPath(
-              totalLevels: totalLevels,
-              currentLevel: currentLevel,
-              completedLevels: completedLevels,
-            ),
-            const SizedBox(height: 18),
-            if (currentLevel >= 1 && currentLevel <= totalLevels)
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () {},
-                  icon: const Icon(Icons.play_arrow),
-                  label: Text('Start Level $currentLevel'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
+            if (isAbcd) ...[
+              const SizedBox(height: 16),
+              Text(
+                'Choose Your Level',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
+              const SizedBox(height: 4),
+              const Text(
+                'Complete tasks to unlock all levels!',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+              const SizedBox(height: 10),
+              _LevelPath(
+                totalLevels: totalLevels,
+                currentLevel: currentLevel,
+                completedLevels: completedLevels,
+                onCompleteLevel: (level) {
+                  setState(() {
+                    completedLevels.add(level);
+                    final nextLevel = level + 1;
+                    if (nextLevel <= totalLevels) {
+                      currentLevel = nextLevel;
+                    }
+                  });
+                  _saveProgress();
+                },
+              ),
+              const SizedBox(height: 18),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -86,12 +120,16 @@ class _LevelBubble extends StatelessWidget {
   final bool isCompleted;
   final bool isUnlocked;
   final bool isCurrent;
+  final String iconPath;
+  final VoidCallback? onTap;
 
   const _LevelBubble({
     required this.level,
     required this.isCompleted,
     required this.isUnlocked,
     required this.isCurrent,
+    required this.iconPath,
+    required this.onTap,
   });
 
   @override
@@ -108,48 +146,53 @@ class _LevelBubble extends StatelessWidget {
       clipBehavior: Clip.none,
       alignment: Alignment.center,
       children: [
-        Container(
-          width: 64,
-          height: 64,
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            // color: baseColor.withOpacity(0.18),
-            shape: BoxShape.circle,
-            border: Border.all(color: baseColor, width: 3),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.08),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          alignment: Alignment.center,
-          child: Image.asset(
-            'assets/src/A.png',
-            width: 30,
-            height: 30,
-          ),
-        ),
-        if (isCompleted)
-          const Positioned(
-            right: -2,
-            top: -2,
-            child: Icon(Icons.check_circle, color: Colors.green, size: 20),
-          ),
-        if (!isUnlocked)
-          Positioned(
-            right: -4,
-            bottom: -4,
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(40),
             child: Container(
-              padding: const EdgeInsets.all(4),
+              width: 64,
+              height: 64,
               decoration: BoxDecoration(
-                color: Colors.grey.shade600,
+                color: Theme.of(context).colorScheme.surface,
                 shape: BoxShape.circle,
+                border: Border.all(color: baseColor, width: 3),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
               ),
-              child: const Icon(Icons.lock, size: 12, color: Colors.white),
+              alignment: Alignment.center,
+              child: Image.asset(iconPath, width: 30, height: 30),
             ),
           ),
+        ),
+        Positioned(
+          right: -4,
+          bottom: -4,
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: (isUnlocked || isCompleted)
+                  ? Colors.green
+                  : Colors.grey.shade600,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              isCompleted
+                  ? Icons.check
+                  : isUnlocked
+                  ? Icons.lock_open
+                  : Icons.lock,
+              size: 12,
+              color: Colors.white,
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -159,11 +202,13 @@ class _LevelPath extends StatelessWidget {
   final int totalLevels;
   final int currentLevel;
   final Set<int> completedLevels;
+  final ValueChanged<int> onCompleteLevel;
 
   const _LevelPath({
     required this.totalLevels,
     required this.currentLevel,
     required this.completedLevels,
+    required this.onCompleteLevel,
   });
 
   @override
@@ -199,6 +244,7 @@ class _LevelPath extends StatelessWidget {
                 final alignLeft = i.isEven;
                 final x = alignLeft ? leftX : rightX;
                 final y = (i * itemHeight) + (itemHeight / 2);
+                final iconPath = _levelIconFor(level);
 
                 return Positioned(
                   left: x - (bubbleSize / 2),
@@ -210,6 +256,18 @@ class _LevelPath extends StatelessWidget {
                         isCompleted: isCompleted,
                         isUnlocked: isUnlocked,
                         isCurrent: isCurrent,
+                        iconPath: iconPath,
+                        onTap: () async {
+                          if (!isUnlocked) return;
+                          final completed = await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => LevelDetailScreen(level: level),
+                            ),
+                          );
+                          if (completed == true) {
+                            onCompleteLevel(level);
+                          }
+                        },
                       ),
                       const SizedBox(height: 6),
                       Text(
@@ -230,6 +288,18 @@ class _LevelPath extends StatelessWidget {
       },
     );
   }
+}
+
+String _levelIconFor(int level) {
+  const icons = [
+    'assets/src/start.png',
+    'assets/src/B.png',
+    'assets/src/C.png',
+    'assets/src/D.png',
+    'assets/src/finish.png',
+  ];
+  final index = (level - 1) % icons.length;
+  return icons[index];
 }
 
 class _SnakePathPainter extends CustomPainter {
@@ -264,14 +334,7 @@ class _SnakePathPainter extends CustomPainter {
         final prevY = ((i - 1) * itemHeight) + (itemHeight / 2);
         final prevX = (i - 1).isEven ? leftX : rightX;
         final midY = (prevY + y) / 2;
-        path.cubicTo(
-          prevX,
-          midY,
-          x,
-          midY,
-          x,
-          y,
-        );
+        path.cubicTo(prevX, midY, x, midY, x, y);
       }
     }
     canvas.drawPath(path, paint);
@@ -279,4 +342,130 @@ class _SnakePathPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class LevelDetailScreen extends StatelessWidget {
+  final int level;
+
+  const LevelDetailScreen({super.key, required this.level});
+
+  @override
+  Widget build(BuildContext context) {
+    final isLevelOne = level == 1;
+    return Scaffold(
+      appBar: AppBar(
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        title: Text('Level $level'),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await showDialog<void>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Level Completed'),
+                  content: const Text('Next level unlocked.'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('OK'),
+                    ),
+                  ],
+                ),
+              );
+              Navigator.of(context).pop(true);
+            },
+            child: const Text(
+              'Complete',
+              style: TextStyle(
+                color: Colors.green,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Expanded(
+              child: isLevelOne
+                  ? _LevelOneGrid()
+                  : Center(
+                      child: Text(
+                        'Level $level',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LevelOneGrid extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    const items = [
+      'assets/src/A.png',
+      'assets/src/B.png',
+      'assets/src/C.png',
+      'assets/src/D.png',
+      'assets/src/E.png',
+      'assets/src/F.png',
+      'assets/src/G.png',
+      'assets/src/H.png',
+      'assets/src/I.png',
+      'assets/src/J.png',
+      'assets/src/K.png',
+      'assets/src/L.png',
+      'assets/src/M.png',
+      'assets/src/N.png',
+      'assets/src/O.png',
+      'assets/src/P.png',
+      'assets/src/Q.png',
+      'assets/src/R.png',
+    ];
+    return GridView.builder(
+      itemCount: items.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+        childAspectRatio: 1,
+      ),
+      itemBuilder: (context, index) {
+        return Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
+              width: 2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.06),
+                blurRadius: 6,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          alignment: Alignment.center,
+          child: Image.asset(
+            items[index],
+            width: 72,
+            height: 72,
+            fit: BoxFit.contain,
+          ),
+        );
+      },
+    );
+  }
 }
