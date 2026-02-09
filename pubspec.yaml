@@ -95,6 +95,27 @@ flutter:
     - assets/src/electronics.png
     - assets/src/reasoning.png
     - assets/src/language.png
+    - assets/src/wl.png
+    - assets/src/A.png
+    - assets/src/B.png
+    - assets/src/C.png
+    - assets/src/D.png
+    - assets/src/E.png
+    - assets/src/F.png
+    - assets/src/G.png
+    - assets/src/H.png
+    - assets/src/I.png
+    - assets/src/J.png
+    - assets/src/K.png
+    - assets/src/L.png
+    - assets/src/M.png
+    - assets/src/N.png
+    - assets/src/O.png
+    - assets/src/P.png
+    - assets/src/Q.png
+    - assets/src/R.png
+    - assets/src/start.png
+    - assets/src/finish.png
     - assets/bgs/ian.mp3
 
   # To add assets to your application, add an assets section, like this:
