@@ -96,7 +96,7 @@ class AppearanceScreen extends StatelessWidget {
   }) {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: themeNotifier,
-      builder: (_, current, __) {
+      builder: (_, current, _) {
         final selected = current == mode;
 
         return ListTile(
