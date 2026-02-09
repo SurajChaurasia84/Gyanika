@@ -46,7 +46,7 @@ class ActivityScreen extends StatelessWidget {
           return ListView.separated(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
             itemCount: snapshot.data!.docs.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            separatorBuilder: (_, _) => const SizedBox(height: 10),
             itemBuilder: (context, index) {
               final doc = snapshot.data!.docs[index];
               final data = doc.data() as Map<String, dynamic>;
@@ -317,10 +317,10 @@ String _collectionFromPostType(String postType) {
 
 String _titleFromPostType(String postType) {
   final type = postType.toLowerCase();
-  if (type.contains('question')) return 'question';
-  if (type.contains('quiz')) return 'quiz';
-  if (type.contains('poll')) return 'poll';
-  return 'post';
+  if (type.contains('question')) return 'Question';
+  if (type.contains('quiz')) return 'Quiz';
+  if (type.contains('poll')) return 'Poll';
+  return 'Post';
 }
 
 String _targetUidFromActivity(Map<String, dynamic> data) {
@@ -338,7 +338,7 @@ void _pushSmooth(BuildContext context, Widget page) {
     context,
     PageRouteBuilder(
       transitionDuration: const Duration(milliseconds: 250),
-      pageBuilder: (_, animation, __) => FadeTransition(
+      pageBuilder: (_, animation, _) => FadeTransition(
         opacity: CurvedAnimation(parent: animation, curve: Curves.easeInOut),
         child: SlideTransition(
           position: Tween<Offset>(
