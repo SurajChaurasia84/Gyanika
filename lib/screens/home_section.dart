@@ -11,7 +11,7 @@ import 'package:hive/hive.dart';
 import 'my_profile_screen.dart';
 import 'course_detail_screen.dart';
 import 'explore_section.dart';
-import 'subject_feed_screen.dart';
+import 'subject_screen.dart';
 import 'profile_screen.dart';
 
 class HomeSection extends StatefulWidget {
@@ -571,7 +571,7 @@ class _HomeSubjectCard extends StatelessWidget {
           context,
           MaterialPageRoute(
             builder: (_) =>
-                SubjectFeedScreen(subjectName: title, stream: stream),
+                SubjectScreen(subjectName: title, stream: stream),
           ),
         );
       },
@@ -1193,7 +1193,7 @@ class _ExploreSubjectCard extends StatelessWidget {
           context,
           MaterialPageRoute(
             builder: (_) =>
-                SubjectFeedScreen(subjectName: title, stream: stream),
+                SubjectScreen(subjectName: title, stream: stream),
           ),
         );
       },
