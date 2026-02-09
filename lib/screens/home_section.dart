@@ -904,7 +904,7 @@ class _SearchAllScreenState extends State<SearchAllScreen> {
           controller: _ctrl,
           autofocus: true,
           decoration: const InputDecoration(
-            hintText: 'Search anything...',
+            hintText: 'Search',
             border: InputBorder.none,
           ),
           onChanged: (_) => setState(() {}),
