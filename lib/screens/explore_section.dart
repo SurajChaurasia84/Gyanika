@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'subject_feed_screen.dart';
+import 'subject_screen.dart';
 
 class ExploreSection extends StatefulWidget {
   const ExploreSection({super.key});
@@ -346,7 +346,7 @@ class _SubjectCard extends StatelessWidget {
           context,
           MaterialPageRoute(
             builder: (_) =>
-                SubjectFeedScreen(subjectName: title, stream: stream),
+                SubjectScreen(subjectName: title, stream: stream),
           ),
         );
       },
