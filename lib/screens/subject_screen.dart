@@ -431,6 +431,14 @@ class _LevelOneGrid extends StatelessWidget {
       'assets/src/P.png',
       'assets/src/Q.png',
       'assets/src/R.png',
+      'assets/src/S.png',
+      'assets/src/T.png',
+      'assets/src/U.png',
+      'assets/src/V.png',
+      'assets/src/W.png',
+      'assets/src/X.png',
+      'assets/src/Y.png',
+      'assets/src/Z.png',
     ];
     return GridView.builder(
       itemCount: items.length,
