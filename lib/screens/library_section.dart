@@ -1208,11 +1208,19 @@ class FollowButton extends StatelessWidget {
             }
             await batch.commit();
 
-            if (!isFollowing && myUid != targetUid) {
-              final myName = await _currentUserLabel();
-              await NotificationHelper.addActivity(
+            if (myUid == targetUid) {
+              return;
+            }
+
+            if (isFollowing) {
+              await NotificationHelper.removeFollowActivity(
                 targetUid: targetUid,
-                type: 'follow',
+                actorUid: myUid,
+              );
+            } else {
+              final myName = await _currentUserLabel();
+              await NotificationHelper.upsertFollowActivity(
+                targetUid: targetUid,
                 title: '$myName started followed you',
                 actorUid: myUid,
               );
