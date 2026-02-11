@@ -81,4 +81,66 @@ class NotificationHelper {
     }
     await batch.commit();
   }
+
+  static String _likeActivityDocId({
+    required String actorUid,
+    required String postId,
+    required String postType,
+  }) {
+    return 'like_${actorUid}_${postType}_$postId';
+  }
+
+  static Future<void> upsertLikeActivity({
+    required String targetUid,
+    required String actorUid,
+    required String title,
+    required String postId,
+    required String postType,
+    String? actorName,
+    String? content,
+    Map<String, dynamic>? extra,
+  }) async {
+    final data = <String, dynamic>{
+      'type': 'like',
+      'title': title,
+      'timestamp': FieldValue.serverTimestamp(),
+      'read': false,
+      'actorUid': actorUid,
+      'postId': postId,
+      'postType': postType,
+    };
+
+    if (actorName != null && actorName.trim().isNotEmpty) {
+      data['actorName'] = actorName.trim();
+    }
+    if (content != null && content.trim().isNotEmpty) {
+      data['content'] = content.trim();
+    }
+    if (extra != null && extra.isNotEmpty) {
+      data.addAll(extra);
+    }
+
+    await _activityRef(targetUid).doc(
+      _likeActivityDocId(
+        actorUid: actorUid,
+        postId: postId,
+        postType: postType,
+      ),
+    ).set(data, SetOptions(merge: true));
+  }
+
+  static Future<void> removeLikeActivity({
+    required String targetUid,
+    required String actorUid,
+    required String postId,
+    required String postType,
+  }) async {
+    await _activityRef(targetUid).doc(
+      _likeActivityDocId(
+        actorUid: actorUid,
+        postId: postId,
+        postType: postType,
+      ),
+    ).delete();
+  }
 }
