@@ -7,16 +7,22 @@ import 'package:gyanika/helpers/notification_helper.dart';
 
 Future<String> _currentUserLabel() async {
   final uid = FirebaseAuth.instance.currentUser?.uid;
-  if (uid == null) return 'Someone';
+  if (uid == null) {
+    return 'Someone';
+  }
   final snap = await FirebaseFirestore.instance
       .collection('users')
       .doc(uid)
       .get();
   final data = snap.data() ?? {};
   final name = (data['name'] ?? '').toString().trim();
-  if (name.isNotEmpty) return name;
+  if (name.isNotEmpty) {
+    return name;
+  }
   final username = (data['username'] ?? '').toString().trim();
-  if (username.isNotEmpty) return username;
+  if (username.isNotEmpty) {
+    return username;
+  }
   return 'Someone';
 }
 
@@ -146,7 +152,9 @@ class _LibrarySectionState extends State<LibrarySection> {
   }
 
   void _onScroll() {
-    if (!_scrollCtrl.hasClients) return;
+    if (!_scrollCtrl.hasClients) {
+      return;
+    }
     final max = _scrollCtrl.position.maxScrollExtent;
     final current = _scrollCtrl.position.pixels;
     if (current >= max - 200) {
@@ -155,7 +163,9 @@ class _LibrarySectionState extends State<LibrarySection> {
   }
 
   void _setFilter(String value) {
-    if (_filter == value) return;
+    if (_filter == value) {
+      return;
+    }
     setState(() => _filter = value);
     _resetAndLoad();
   }
@@ -173,18 +183,41 @@ class _LibrarySectionState extends State<LibrarySection> {
     _loadInitial();
   }
 
+  Future<void> _refreshFeed() async {
+    _questions.clear();
+    _polls.clear();
+    _quizzes.clear();
+    _lastQuestion = null;
+    _lastPoll = null;
+    _lastQuiz = null;
+    _hasMoreQuestions = true;
+    _hasMorePolls = true;
+    _hasMoreQuizzes = true;
+    await _loadInitial();
+  }
+
   Future<void> _loadInitial() async {
-    if (_loading) return;
+    if (_loading) {
+      return;
+    }
     setState(() => _loading = true);
     await _loadForFilter();
     if (mounted) setState(() => _loading = false);
   }
 
   Future<void> _loadMore() async {
-    if (_loading) return;
-    if (_filter == 'Questions' && !_hasMoreQuestions) return;
-    if (_filter == 'Polls' && !_hasMorePolls) return;
-    if (_filter == 'Quizzes' && !_hasMoreQuizzes) return;
+    if (_loading) {
+      return;
+    }
+    if (_filter == 'Questions' && !_hasMoreQuestions) {
+      return;
+    }
+    if (_filter == 'Polls' && !_hasMorePolls) {
+      return;
+    }
+    if (_filter == 'Quizzes' && !_hasMoreQuizzes) {
+      return;
+    }
     if (_filter == 'All' &&
         !_hasMoreQuestions &&
         !_hasMorePolls &&
@@ -289,9 +322,15 @@ class _LibrarySectionState extends State<LibrarySection> {
     docs.sort((a, b) {
       final aTs = (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
       final bTs = (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
-      if (aTs == null && bTs == null) return 0;
-      if (aTs == null) return 1;
-      if (bTs == null) return -1;
+      if (aTs == null && bTs == null) {
+        return 0;
+      }
+      if (aTs == null) {
+        return 1;
+      }
+      if (bTs == null) {
+        return -1;
+      }
       return bTs.compareTo(aTs);
     });
     return docs;
@@ -303,10 +342,21 @@ class _LibrarySectionState extends State<LibrarySection> {
       return const Center(child: CircularProgressIndicator());
     }
     if (docs.isEmpty) {
-      return const Center(
-        child: Text(
-          'No posts found',
-          style: TextStyle(color: Colors.grey),
+      return RefreshIndicator(
+        onRefresh: _refreshFeed,
+        child: ListView(
+          controller: _scrollCtrl,
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(12),
+          children: const [
+            SizedBox(height: 160),
+            Center(
+              child: Text(
+                'No posts found',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -320,28 +370,32 @@ class _LibrarySectionState extends State<LibrarySection> {
         }
         return false;
       },
-      child: ListView.builder(
-        controller: _scrollCtrl,
-        padding: const EdgeInsets.all(12),
-        itemCount: docs.length + (_loading ? 1 : 0),
-        itemBuilder: (_, i) {
-          if (i >= docs.length) {
-            return const Padding(
-              padding: EdgeInsets.only(top: 12, bottom: 24),
-              child: Center(child: CircularProgressIndicator()),
+      child: RefreshIndicator(
+        onRefresh: _refreshFeed,
+        child: ListView.builder(
+          controller: _scrollCtrl,
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(12),
+          itemCount: docs.length + (_loading ? 1 : 0),
+          itemBuilder: (_, i) {
+            if (i >= docs.length) {
+              return const Padding(
+                padding: EdgeInsets.only(top: 12, bottom: 24),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            final doc = docs[i];
+            return StreamBuilder<DocumentSnapshot>(
+              stream: doc.reference.snapshots(),
+              builder: (context, snap) {
+                final data =
+                    (snap.data?.data() as Map<String, dynamic>?) ??
+                    (doc.data() as Map<String, dynamic>);
+                return FeedCard(data: data, id: doc.id);
+              },
             );
-          }
-          final doc = docs[i];
-          return StreamBuilder<DocumentSnapshot>(
-            stream: doc.reference.snapshots(),
-            builder: (context, snap) {
-              final data =
-                  (snap.data?.data() as Map<String, dynamic>?) ??
-                  (doc.data() as Map<String, dynamic>);
-              return FeedCard(data: data, id: doc.id);
-            },
-          );
-        },
+          },
+        ),
       ),
     );
   }
@@ -865,9 +919,12 @@ class QuizWidget extends StatelessWidget {
           children: List.generate(options.length, (i) {
             Color? bg;
             if (answered) {
-              if (i == correct) bg = Colors.green.withOpacity(.2);
-              if (i == selected && i != correct)
+              if (i == correct) {
+                bg = Colors.green.withOpacity(.2);
+              }
+              if (i == selected && i != correct) {
                 bg = Colors.red.withOpacity(.2);
+              }
             }
 
             return Container(
@@ -904,7 +961,9 @@ class PollWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (options.isEmpty) return const Text('No poll options');
+    if (options.isEmpty) {
+      return const Text('No poll options');
+    }
 
     final uid = FirebaseAuth.instance.currentUser!.uid;
     final ref = FirebaseFirestore.instance
@@ -1036,7 +1095,9 @@ class _AnswerBoxState extends State<AnswerBox> {
         IconButton(
           icon: const Icon(Icons.arrow_upward, color: Colors.indigo),
           onPressed: () async {
-            if (c.text.trim().isEmpty) return;
+            if (c.text.trim().isEmpty) {
+              return;
+            }
             final uid = FirebaseAuth.instance.currentUser!.uid;
             final ref = FirebaseFirestore.instance
                 .collection('questions')
@@ -1044,7 +1105,9 @@ class _AnswerBoxState extends State<AnswerBox> {
                 .collection('answers')
                 .doc(uid);
 
-            if ((await ref.get()).exists) return;
+            if ((await ref.get()).exists) {
+              return;
+            }
             await ref.set({
               'text': c.text.trim(),
               'uid': uid,
@@ -1083,7 +1146,9 @@ class FollowButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final myUid = FirebaseAuth.instance.currentUser!.uid;
-    if (myUid == targetUid) return const SizedBox();
+    if (myUid == targetUid) {
+      return const SizedBox();
+    }
 
     final ref = FirebaseFirestore.instance
         .collection('users')
@@ -1178,8 +1243,9 @@ class UserProfileScreen extends StatelessWidget {
       body: StreamBuilder<DocumentSnapshot>(
         stream: userRef.snapshots(),
         builder: (_, snap) {
-          if (!snap.hasData)
+          if (!snap.hasData) {
             return const Center(child: CircularProgressIndicator());
+          }
           final user = snap.data!.data() as Map<String, dynamic>;
           final username = user['username'] ?? 'User';
 
@@ -1276,10 +1342,12 @@ class _UserPosts extends StatelessWidget {
           .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (_, snap) {
-        if (!snap.hasData)
+        if (!snap.hasData) {
           return const Center(child: CircularProgressIndicator());
-        if (snap.data!.docs.isEmpty)
+        }
+        if (snap.data!.docs.isEmpty) {
           return const Center(child: Text('No posts yet'));
+        }
 
         return ListView.builder(
           itemCount: snap.data!.docs.length,
@@ -1295,22 +1363,38 @@ class _UserPosts extends StatelessWidget {
 
 // ================= HELPERS =================
 String formatCount(int n) {
-  if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
-  if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
+  if (n >= 1000000) {
+    return '${(n / 1000000).toStringAsFixed(1)}M';
+  }
+  if (n >= 1000) {
+    return '${(n / 1000).toStringAsFixed(1)}K';
+  }
   return n.toString();
 }
 
 String timeAgo(Timestamp t) {
   final d = DateTime.now().difference(t.toDate());
-  if (d.inMinutes < 1) return 'just now';
-  if (d.inMinutes < 60) return '${d.inMinutes}m ago';
-  if (d.inHours < 24) return '${d.inHours}h ago';
+  if (d.inMinutes < 1) {
+    return 'just now';
+  }
+  if (d.inMinutes < 60) {
+    return '${d.inMinutes}m ago';
+  }
+  if (d.inHours < 24) {
+    return '${d.inHours}h ago';
+  }
   return '${d.inDays}d ago';
 }
 
 String _answerLabel({required String type, required int count}) {
-  if (type == 'question') return '$count answers';
-  if (type == 'quiz') return '$count answers';
-  if (type == 'poll') return '$count votes';
+  if (type == 'question') {
+    return '$count answers';
+  }
+  if (type == 'quiz') {
+    return '$count answers';
+  }
+  if (type == 'poll') {
+    return '$count votes';
+  }
   return '$count';
 }
