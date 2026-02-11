@@ -425,16 +425,28 @@ class _HomeSectionState extends State<HomeSection> {
     if (subjects.isEmpty) {
       return const SizedBox.shrink();
     }
-    return SizedBox(
-      height: 110,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: subjects.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 12),
-        itemBuilder: (context, index) {
-          return _HomeSubjectCard(title: subjects[index], stream: stream);
-        },
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cardWidth = (constraints.maxWidth - 12) / 2;
+        final cardHeight = cardWidth / 1.9;
+        return SizedBox(
+          height: cardHeight,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: subjects.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 12),
+            itemBuilder: (context, index) {
+              return SizedBox(
+                width: cardWidth,
+                child: _HomeSubjectCard(
+                  title: subjects[index],
+                  stream: stream,
+                ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -576,7 +588,6 @@ class _HomeSubjectCard extends StatelessWidget {
         );
       },
       child: Container(
-        width: 170,
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(14),
