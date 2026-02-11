@@ -1040,21 +1040,31 @@ class LikeButton extends StatelessWidget {
             final post = FirebaseFirestore.instance
                 .collection(collection)
                 .doc(postId);
-            FirebaseFirestore.instance.runTransaction((tx) async {
+            await FirebaseFirestore.instance.runTransaction((tx) async {
               liked ? tx.delete(ref) : tx.set(ref, {'uid': uid});
               tx.update(post, {'likes': FieldValue.increment(liked ? -1 : 1)});
             });
 
-            if (!liked && uid != ownerUid) {
+            if (uid == ownerUid) {
+              return;
+            }
+
+            if (liked) {
+              await NotificationHelper.removeLikeActivity(
+                targetUid: ownerUid,
+                actorUid: uid,
+                postId: postId,
+                postType: collection,
+              );
+            } else {
               final myName = await _currentUserLabel();
               final likeLabel = collection == 'questions'
                   ? 'question'
                   : collection == 'polls'
                   ? 'poll'
                   : 'quiz';
-              await NotificationHelper.addActivity(
+              await NotificationHelper.upsertLikeActivity(
                 targetUid: ownerUid,
-                type: 'like',
                 title: '$myName likes your $likeLabel.',
                 actorUid: uid,
                 postId: postId,
