@@ -15,17 +15,6 @@ class _ExploreSectionState extends State<ExploreSection> {
   final Set<String> expandedSections = {};
 
   final Map<String, List<String>> streams = {
-    'LKG/UKG': ['ABCD', '0-9'],
-    'Class 1-5': [
-      'Hindi',
-      'English',
-      'Maths',
-      'Science',
-      'Environmental Studies',
-      'General Knowledge',
-      'Moral Science',
-    ],
-    'Class 6-8': ['Hindi', 'English', 'Maths', 'Science'],
     'Class 9-10th': [
       'Hindi',
       'English',
@@ -196,12 +185,6 @@ class SubjectConfig {
 }
 
 final Map<String, SubjectConfig> subjectConfigs = {
-  'ABCD': SubjectConfig(
-    color: Color(0xFFEF5350),
-    image: 'assets/src/alphabet.png',
-  ),
-  '0-9': SubjectConfig(color: Color(0xFF1FA971), image: 'assets/src/123.png'),
-
   // Languages
   'Hindi': SubjectConfig(
     color: Color(0xFF42A5F5),
@@ -223,18 +206,6 @@ final Map<String, SubjectConfig> subjectConfigs = {
   'Science': SubjectConfig(
     color: Color(0xFF26A69A),
     image: 'assets/src/science.png',
-  ),
-  'Environmental Studies': SubjectConfig(
-    color: Color(0xFF66BB6A),
-    image: 'assets/src/evs.png',
-  ),
-  'General Knowledge': SubjectConfig(
-    color: Color(0xFFAB47BC),
-    image: 'assets/src/gk.png',
-  ),
-  'Moral Science': SubjectConfig(
-    color: Color(0xFF8D6E63),
-    image: 'assets/src/moral.png',
   ),
   'Physics': SubjectConfig(
     color: Color(0xFFFF8A00),
