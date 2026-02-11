@@ -609,14 +609,48 @@ class _HomeSubjectCard extends StatelessWidget {
             ),
             Padding(
               padding: const EdgeInsets.all(14),
-              child: Text(
-                title.toUpperCase(),
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                  letterSpacing: .6,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title.toUpperCase(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      letterSpacing: .6,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collectionGroup('sets')
+                        .where('stream', isEqualTo: stream)
+                        .where('subject', isEqualTo: title)
+                        .snapshots(),
+                    builder: (context, snap) {
+                      final docs = snap.data?.docs ?? const [];
+                      final totalQuestions = docs.fold<int>(0, (acc, doc) {
+                        final data = doc.data() as Map<String, dynamic>? ?? const {};
+                        final q = data['questionCount'];
+                        if (q is int) return acc + q;
+                        if (q is num) return acc + q.toInt();
+                        if (q is String) return acc + (int.tryParse(q) ?? 0);
+                        return acc;
+                      });
+                      return Text(
+                        '$totalQuestions questions',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ),
             ),
           ],
@@ -1219,14 +1253,48 @@ class _ExploreSubjectCard extends StatelessWidget {
             ),
             Padding(
               padding: const EdgeInsets.all(14),
-              child: Text(
-                title.toUpperCase(),
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                  letterSpacing: .6,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title.toUpperCase(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      letterSpacing: .6,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collectionGroup('sets')
+                        .where('stream', isEqualTo: stream)
+                        .where('subject', isEqualTo: title)
+                        .snapshots(),
+                    builder: (context, snap) {
+                      final docs = snap.data?.docs ?? const [];
+                      final totalQuestions = docs.fold<int>(0, (acc, doc) {
+                        final data = doc.data() as Map<String, dynamic>? ?? const {};
+                        final q = data['questionCount'];
+                        if (q is int) return acc + q;
+                        if (q is num) return acc + q.toInt();
+                        if (q is String) return acc + (int.tryParse(q) ?? 0);
+                        return acc;
+                      });
+                      return Text(
+                        '$totalQuestions questions',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ),
             ),
           ],
