@@ -9,8 +9,10 @@ import 'settings_screen.dart';
 Future<String> _currentUserLabel() async {
   final uid = FirebaseAuth.instance.currentUser?.uid;
   if (uid == null) return 'Someone';
-  final snap =
-      await FirebaseFirestore.instance.collection('users').doc(uid).get();
+  final snap = await FirebaseFirestore.instance
+      .collection('users')
+      .doc(uid)
+      .get();
   final data = snap.data() ?? {};
   final name = (data['name'] ?? '').toString().trim();
   if (name.isNotEmpty) return name;
@@ -98,8 +100,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                     );
                   },
                 ),
-              if (!isOwner)
-                _ProfileFollowButton(targetUid: uid),
+              if (!isOwner) _ProfileFollowButton(targetUid: uid),
             ],
           ),
 
@@ -730,13 +731,10 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
   Future<void> _save() async {
     if (_saving) return;
     setState(() => _saving = true);
-    await FirebaseFirestore.instance.collection('users').doc(widget.uid).set(
-      {
-        'name': _nameCtrl.text.trim(),
-        'bio': _bioCtrl.text.trim(),
-      },
-      SetOptions(merge: true),
-    );
+    await FirebaseFirestore.instance.collection('users').doc(widget.uid).set({
+      'name': _nameCtrl.text.trim(),
+      'bio': _bioCtrl.text.trim(),
+    }, SetOptions(merge: true));
     if (!mounted) return;
     Navigator.pop(context);
   }
@@ -795,12 +793,15 @@ class PostDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final postRef =
-        FirebaseFirestore.instance.collection(collection).doc(postId);
+    final postRef = FirebaseFirestore.instance
+        .collection(collection)
+        .doc(postId);
     final myUid = FirebaseAuth.instance.currentUser!.uid;
 
     return Scaffold(
       appBar: AppBar(
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
         title: Text(type),
         actions: [
           StreamBuilder<DocumentSnapshot>(
@@ -816,9 +817,7 @@ class PostDetailScreen extends StatelessWidget {
                   if (value == 'edit') {
                     showDialog(
                       context: context,
-                      builder: (_) => _EditPostDialog(
-                        postRef: postRef,
-                      ),
+                      builder: (_) => _EditPostDialog(postRef: postRef),
                     );
                   }
                   if (value == 'delete') {
@@ -844,10 +843,9 @@ class PostDetailScreen extends StatelessWidget {
                     await FirebaseFirestore.instance
                         .collection('users')
                         .doc(myUid)
-                        .set(
-                      {'posts': FieldValue.increment(-1)},
-                      SetOptions(merge: true),
-                    );
+                        .set({
+                          'posts': FieldValue.increment(-1),
+                        }, SetOptions(merge: true));
                     if (!context.mounted) return;
                     Navigator.pop(context);
                   }
@@ -878,10 +876,7 @@ class PostDetailScreen extends StatelessWidget {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Text(
-                content,
-                style: const TextStyle(fontSize: 16),
-              ),
+              Text(content, style: const TextStyle(fontSize: 16)),
               const SizedBox(height: 8),
               _MetaRow(
                 items: [
@@ -909,11 +904,11 @@ class PostDetailScreen extends StatelessWidget {
               ],
               if (type == 'Question') ...[
                 const SizedBox(height: 16),
-                const Text(
-                  'Answers',
-                  style: TextStyle(fontWeight: FontWeight.w600),
+                _QuestionAnswerBox(
+                  postId: postId,
+                  ownerUid: (data['uid'] ?? '').toString(),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 _AnswerList(postId: postId),
               ],
             ],
@@ -981,8 +976,9 @@ class _OptionStatsList extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ...List.generate(options.length, (i) {
-              final percent =
-                  total == 0 ? 0 : ((counts[i] / total) * 100).round();
+              final percent = total == 0
+                  ? 0
+                  : ((counts[i] / total) * 100).round();
               final isCorrect = type == 'Quiz' && correctIndex == i;
               final fillColor = isCorrect
                   ? Theme.of(context).colorScheme.primary.withOpacity(0.18)
@@ -994,8 +990,9 @@ class _OptionStatsList extends StatelessWidget {
                   color: Theme.of(context).colorScheme.surface,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color:
-                        Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.outline.withOpacity(0.2),
                   ),
                 ),
                 child: ClipRRect(
@@ -1005,10 +1002,7 @@ class _OptionStatsList extends StatelessWidget {
                       FractionallySizedBox(
                         widthFactor: percent / 100,
                         alignment: Alignment.centerLeft,
-                        child: Container(
-                          height: 44,
-                          color: fillColor,
-                        ),
+                        child: Container(height: 44, color: fillColor),
                       ),
                       Padding(
                         padding: const EdgeInsets.symmetric(
@@ -1026,9 +1020,7 @@ class _OptionStatsList extends StatelessWidget {
                                       : FontWeight.w400,
                                   color: isCorrect
                                       ? Theme.of(context).colorScheme.primary
-                                      : Theme.of(context)
-                                          .colorScheme
-                                          .onSurface,
+                                      : Theme.of(context).colorScheme.onSurface,
                                 ),
                               ),
                             ),
@@ -1036,9 +1028,9 @@ class _OptionStatsList extends StatelessWidget {
                               '$percent%',
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
                               ),
                             ),
                           ],
@@ -1084,9 +1076,17 @@ class _AnswerList extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
         if (snap.data!.docs.isEmpty) {
-          return const Text(
-            'No answers yet',
-            style: TextStyle(color: Colors.grey),
+          return const Expanded(
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: Padding(
+                padding: EdgeInsets.only(top: 16),
+                child: Text(
+                  'No answers yet',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ),
+            ),
           );
         }
 
@@ -1119,6 +1119,79 @@ class _AnswerList extends StatelessWidget {
           },
         );
       },
+    );
+  }
+}
+
+class _QuestionAnswerBox extends StatefulWidget {
+  final String postId;
+  final String ownerUid;
+
+  const _QuestionAnswerBox({required this.postId, required this.ownerUid});
+
+  @override
+  State<_QuestionAnswerBox> createState() => _QuestionAnswerBoxState();
+}
+
+class _QuestionAnswerBoxState extends State<_QuestionAnswerBox> {
+  final TextEditingController _ctrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_ctrl.text.trim().isEmpty) return;
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final ref = FirebaseFirestore.instance
+        .collection('questions')
+        .doc(widget.postId)
+        .collection('answers')
+        .doc(uid);
+
+    if ((await ref.get()).exists) return;
+    await ref.set({
+      'text': _ctrl.text.trim(),
+      'uid': uid,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    await FirebaseFirestore.instance
+        .collection('questions')
+        .doc(widget.postId)
+        .update({'answeredCount': FieldValue.increment(1)});
+
+    if (uid != widget.ownerUid) {
+      final myName = await _currentUserLabel();
+      await NotificationHelper.addActivity(
+        targetUid: widget.ownerUid,
+        type: 'answer',
+        title: '$myName answered your question.',
+        actorUid: uid,
+        postId: widget.postId,
+        postType: 'question',
+        content: _ctrl.text.trim(),
+      );
+    }
+    _ctrl.clear();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            controller: _ctrl,
+            decoration: const InputDecoration(hintText: 'Answer...'),
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.arrow_upward, color: Colors.indigo),
+          onPressed: _submit,
+        ),
+      ],
     );
   }
 }
@@ -1167,10 +1240,10 @@ class _AnswerTileState extends State<_AnswerTile> {
         .doc(widget.answerId)
         .collection('responses')
         .add({
-      'uid': myUid,
-      'text': text,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+          'uid': myUid,
+          'text': text,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
     if (!mounted) return;
     setState(() {
       _sending = false;
@@ -1181,8 +1254,9 @@ class _AnswerTileState extends State<_AnswerTile> {
 
   @override
   Widget build(BuildContext context) {
-    final userRef =
-        FirebaseFirestore.instance.collection('users').doc(widget.answerUid);
+    final userRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(widget.answerUid);
     final timeText = _timeLabel(widget.createdAt);
 
     return Container(
@@ -1202,7 +1276,7 @@ class _AnswerTileState extends State<_AnswerTile> {
             builder: (_, snap) {
               final username =
                   (snap.data?.data() as Map<String, dynamic>?)?['username'] ??
-                      'User';
+                  'User';
               final safeName = username.toString();
               return Row(
                 children: [
@@ -1211,8 +1285,7 @@ class _AnswerTileState extends State<_AnswerTile> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) =>
-                              ProfileScreen(uid: widget.answerUid),
+                          builder: (_) => ProfileScreen(uid: widget.answerUid),
                         ),
                       );
                     },
@@ -1235,8 +1308,7 @@ class _AnswerTileState extends State<_AnswerTile> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) =>
-                              ProfileScreen(uid: widget.answerUid),
+                          builder: (_) => ProfileScreen(uid: widget.answerUid),
                         ),
                       );
                     },
@@ -1280,10 +1352,7 @@ class _AnswerTileState extends State<_AnswerTile> {
           Text(widget.text),
           if (_showResponses) ...[
             const SizedBox(height: 8),
-            _ResponseList(
-              postId: widget.postId,
-              answerId: widget.answerId,
-            ),
+            _ResponseList(postId: widget.postId, answerId: widget.answerId),
           ],
           const SizedBox(height: 8),
           Row(
@@ -1297,9 +1366,7 @@ class _AnswerTileState extends State<_AnswerTile> {
           if (_replying) ...[
             TextField(
               controller: _replyCtrl,
-              decoration: const InputDecoration(
-                hintText: 'Write a reply...',
-              ),
+              decoration: const InputDecoration(hintText: 'Write a reply...'),
             ),
             const SizedBox(height: 6),
             Align(
@@ -1343,10 +1410,7 @@ class _MetaItem {
 
   static _MetaItem label(String text) => _MetaItem._(text: text);
 
-  static _MetaItem iconText({
-    required IconData icon,
-    required String text,
-  }) =>
+  static _MetaItem iconText({required IconData icon, required String text}) =>
       _MetaItem._(text: text, icon: icon);
 }
 
@@ -1373,7 +1437,9 @@ class _MetaRow extends StatelessWidget {
           ),
         );
       } else {
-        widgets.add(Text(item.text, style: TextStyle(fontSize: 12, color: color)));
+        widgets.add(
+          Text(item.text, style: TextStyle(fontSize: 12, color: color)),
+        );
       }
       if (i != items.length - 1) {
         widgets.add(const SizedBox(width: 8));
@@ -1381,11 +1447,7 @@ class _MetaRow extends StatelessWidget {
         widgets.add(const SizedBox(width: 8));
       }
     }
-    return Wrap(
-      spacing: 0,
-      runSpacing: 6,
-      children: widgets,
-    );
+    return Wrap(spacing: 0, runSpacing: 6, children: widgets);
   }
 }
 
@@ -1440,11 +1502,7 @@ class _ResponseList extends StatelessWidget {
             final text = (data['text'] ?? '').toString();
             final createdAt = data['createdAt'] as Timestamp?;
 
-            return _ResponseTile(
-              uid: uid,
-              text: text,
-              createdAt: createdAt,
-            );
+            return _ResponseTile(uid: uid, text: text, createdAt: createdAt);
           },
         );
       },
@@ -1481,9 +1539,7 @@ class _ResponseTile extends StatelessWidget {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => ProfileScreen(uid: uid),
-                  ),
+                  MaterialPageRoute(builder: (_) => ProfileScreen(uid: uid)),
                 );
               },
               child: CircleAvatar(
@@ -1525,8 +1581,7 @@ class _ResponseTile extends StatelessWidget {
                         '•',
                         style: TextStyle(
                           fontSize: 11,
-                          color:
-                              Theme.of(context).colorScheme.onSurfaceVariant,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                       const SizedBox(width: 6),
@@ -1534,8 +1589,7 @@ class _ResponseTile extends StatelessWidget {
                         timeText,
                         style: TextStyle(
                           fontSize: 11,
-                          color:
-                              Theme.of(context).colorScheme.onSurfaceVariant,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -1575,13 +1629,10 @@ class _EditPostDialogState extends State<_EditPostDialog> {
   Future<void> _save() async {
     if (_saving) return;
     setState(() => _saving = true);
-    await widget.postRef.set(
-      {
-        'content': _contentCtrl.text.trim(),
-        'category': _categoryCtrl.text.trim(),
-      },
-      SetOptions(merge: true),
-    );
+    await widget.postRef.set({
+      'content': _contentCtrl.text.trim(),
+      'category': _categoryCtrl.text.trim(),
+    }, SetOptions(merge: true));
     if (!mounted) return;
     Navigator.pop(context);
   }
