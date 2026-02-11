@@ -249,7 +249,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
 }
 
 List<Widget> _buildGroupedList(List<QueryDocumentSnapshot> docs) {
-  final grouped = _groupByTime(docs);
+  final grouped = _groupByTime(_dedupeLikeNotifications(docs));
   final widgets = <Widget>[];
   if (grouped.today.isNotEmpty) {
     widgets.add(_SectionLabel('Today'));
@@ -271,6 +271,37 @@ List<Widget> _buildGroupedList(List<QueryDocumentSnapshot> docs) {
     widgets.addAll(grouped.older.map((d) => _NotificationTile(doc: d)));
   }
   return widgets;
+}
+
+List<QueryDocumentSnapshot> _dedupeLikeNotifications(
+  List<QueryDocumentSnapshot> docs,
+) {
+  final out = <QueryDocumentSnapshot>[];
+  final seenLikeKeys = <String>{};
+
+  for (final doc in docs) {
+    final data = doc.data() as Map<String, dynamic>;
+    final type = (data['type'] ?? '').toString();
+    if (type != 'like') {
+      out.add(doc);
+      continue;
+    }
+
+    final actorUid = (data['actorUid'] ?? '').toString();
+    final postId = (data['postId'] ?? '').toString();
+    final postType = (data['postType'] ?? '').toString();
+    if (actorUid.isEmpty || postId.isEmpty || postType.isEmpty) {
+      out.add(doc);
+      continue;
+    }
+
+    final key = '$actorUid|$postType|$postId';
+    if (seenLikeKeys.add(key)) {
+      out.add(doc);
+    }
+  }
+
+  return out;
 }
 
 class _SectionLabel extends StatelessWidget {
