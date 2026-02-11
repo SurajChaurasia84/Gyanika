@@ -278,10 +278,24 @@ List<QueryDocumentSnapshot> _dedupeLikeNotifications(
 ) {
   final out = <QueryDocumentSnapshot>[];
   final seenLikeKeys = <String>{};
+  final seenFollowKeys = <String>{};
 
   for (final doc in docs) {
     final data = doc.data() as Map<String, dynamic>;
     final type = (data['type'] ?? '').toString();
+    if (type == 'follow') {
+      final actorUid = (data['actorUid'] ?? '').toString();
+      if (actorUid.isEmpty) {
+        out.add(doc);
+        continue;
+      }
+      final key = 'follow|$actorUid';
+      if (seenFollowKeys.add(key)) {
+        out.add(doc);
+      }
+      continue;
+    }
+
     if (type != 'like') {
       out.add(doc);
       continue;
