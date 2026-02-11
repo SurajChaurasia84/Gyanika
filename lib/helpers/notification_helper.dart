@@ -90,6 +90,12 @@ class NotificationHelper {
     return 'like_${actorUid}_${postType}_$postId';
   }
 
+  static String _followActivityDocId({
+    required String actorUid,
+  }) {
+    return 'follow_$actorUid';
+  }
+
   static Future<void> upsertLikeActivity({
     required String targetUid,
     required String actorUid,
@@ -141,6 +147,43 @@ class NotificationHelper {
         postId: postId,
         postType: postType,
       ),
+    ).delete();
+  }
+
+  static Future<void> upsertFollowActivity({
+    required String targetUid,
+    required String actorUid,
+    required String title,
+    String? actorName,
+    Map<String, dynamic>? extra,
+  }) async {
+    final data = <String, dynamic>{
+      'type': 'follow',
+      'title': title,
+      'timestamp': FieldValue.serverTimestamp(),
+      'read': false,
+      'actorUid': actorUid,
+      'targetUid': targetUid,
+    };
+
+    if (actorName != null && actorName.trim().isNotEmpty) {
+      data['actorName'] = actorName.trim();
+    }
+    if (extra != null && extra.isNotEmpty) {
+      data.addAll(extra);
+    }
+
+    await _activityRef(targetUid).doc(
+      _followActivityDocId(actorUid: actorUid),
+    ).set(data, SetOptions(merge: true));
+  }
+
+  static Future<void> removeFollowActivity({
+    required String targetUid,
+    required String actorUid,
+  }) async {
+    await _activityRef(targetUid).doc(
+      _followActivityDocId(actorUid: actorUid),
     ).delete();
   }
 }
