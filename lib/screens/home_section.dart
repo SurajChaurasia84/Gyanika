@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:gyanika/screens/notification_screen.dart';
 import 'package:gyanika/screens/preference_screen.dart';
+import 'package:gyanika/helpers/notification_helper.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -13,6 +16,18 @@ import 'course_detail_screen.dart';
 import 'explore_section.dart';
 import 'subject_screen.dart';
 import 'profile_screen.dart';
+
+Future<String> _dailyCurrentUserLabel() async {
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+  if (uid == null) return 'Someone';
+  final snap = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+  final data = snap.data() ?? {};
+  final name = (data['name'] ?? '').toString().trim();
+  if (name.isNotEmpty) return name;
+  final username = (data['username'] ?? '').toString().trim();
+  if (username.isNotEmpty) return username;
+  return 'Someone';
+}
 
 class HomeSection extends StatefulWidget {
   const HomeSection({super.key});
@@ -39,6 +54,7 @@ class _HomeSectionState extends State<HomeSection> {
       subtitle: 'Solve quick quizzes and keep your streak alive.',
       icon: Iconsax.flash_1,
       colors: [Color(0xFF3257D5), Color(0xFF5E7CFF)],
+      action: _HeroCardAction.dailyPractice,
     ),
     _HeroCardData(
       title: 'Mock Tests',
@@ -408,13 +424,25 @@ class _HomeSectionState extends State<HomeSection> {
                   card: card,
                   theme: theme,
                   onTap: () {
-                    if (card.action == _HeroCardAction.recommended) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const RecommendedCoursesScreen(),
-                        ),
-                      );
+                    switch (card.action) {
+                      case _HeroCardAction.dailyPractice:
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const DailyPracticeScreen(),
+                          ),
+                        );
+                        break;
+                      case _HeroCardAction.recommended:
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const RecommendedCoursesScreen(),
+                          ),
+                        );
+                        break;
+                      case null:
+                        break;
                     }
                   },
                 ),
@@ -626,7 +654,7 @@ class _HeroCardData {
   });
 }
 
-enum _HeroCardAction { recommended }
+enum _HeroCardAction { dailyPractice, recommended }
 
 class _HeroCardView extends StatelessWidget {
   final _HeroCardData card;
@@ -820,6 +848,1004 @@ class RecommendedCoursesScreen extends StatelessWidget {
             },
           );
         },
+      ),
+    );
+  }
+}
+
+class _DailyPracticeQuestion {
+  final String id;
+  final String source;
+  final String content;
+  final List<String> options;
+  final int? correctIndex;
+  final String explanation;
+  final String stream;
+  final String ownerUid;
+  final String ownerName;
+  final String ownerUsername;
+
+  const _DailyPracticeQuestion({
+    required this.id,
+    required this.source,
+    required this.content,
+    required this.options,
+    required this.correctIndex,
+    required this.explanation,
+    required this.stream,
+    required this.ownerUid,
+    required this.ownerName,
+    required this.ownerUsername,
+  });
+
+  String get localKey => '${source}_$id';
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'source': source,
+      'content': content,
+      'options': options,
+      'correctIndex': correctIndex,
+      'explanation': explanation,
+      'stream': stream,
+      'ownerUid': ownerUid,
+      'ownerName': ownerName,
+      'ownerUsername': ownerUsername,
+    };
+  }
+}
+
+class DailyPracticeScreen extends StatefulWidget {
+  const DailyPracticeScreen({super.key});
+
+  @override
+  State<DailyPracticeScreen> createState() => _DailyPracticeScreenState();
+}
+
+class _DailyPracticeScreenState extends State<DailyPracticeScreen> {
+  late Future<void> _initFuture;
+  final String _uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+  final List<_DailyPracticeQuestion> _questions = [];
+  Map<String, int> _answers = {};
+  int _currentIndex = 0;
+  bool _suppressNavigationTap = false;
+  Box? _box;
+  Timer? _midnightTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _initFuture = _initializeDailyPractice();
+    _scheduleMidnightReset();
+  }
+
+  @override
+  void dispose() {
+    _midnightTimer?.cancel();
+    super.dispose();
+  }
+
+  String _dayKey(DateTime d) {
+    final m = d.month.toString().padLeft(2, '0');
+    final day = d.day.toString().padLeft(2, '0');
+    return '${d.year}-$m-$day';
+  }
+
+  void _scheduleMidnightReset() {
+    _midnightTimer?.cancel();
+    final now = DateTime.now();
+    final next = DateTime(now.year, now.month, now.day + 1);
+    _midnightTimer = Timer(next.difference(now), () async {
+      final box = _box ?? await Hive.openBox('daily_practice_local');
+      await box.clear();
+      if (!mounted) return;
+      setState(() {
+        _questions.clear();
+        _answers = {};
+        _currentIndex = 0;
+        _initFuture = _initializeDailyPractice();
+      });
+      _scheduleMidnightReset();
+    });
+  }
+
+  Future<void> _initializeDailyPractice() async {
+    final box = await Hive.openBox('daily_practice_local');
+    _box = box;
+    final fetched = await _fetchDailyQuestions();
+    _questions
+      ..clear()
+      ..addAll(fetched);
+    _answers = {};
+  }
+
+  Future<void> _persistAnswers() async {
+    final box = _box ?? await Hive.openBox('daily_practice_local');
+    final today = _dayKey(DateTime.now());
+    await box.put('answers_${_uid}_$today', _answers);
+  }
+
+  Future<List<_DailyPracticeQuestion>> _fetchCollectionQuestions(
+    String collection,
+    String source,
+    int limit,
+  ) async {
+    final snap = await FirebaseFirestore.instance
+        .collection(collection)
+        .limit(limit)
+        .get();
+    return snap.docs.map((doc) {
+      final data = doc.data();
+      final optionsRaw = data['options'];
+      final options = optionsRaw is List
+          ? optionsRaw
+                .map((e) => e.toString().trim())
+                .where((e) => e.isNotEmpty)
+                .toList()
+          : <String>[];
+      final content = (data['content'] ?? data['question'] ?? '')
+          .toString()
+          .trim();
+      final stream = (data['stream'] ?? data['exam'] ?? data['category'] ?? '')
+          .toString()
+          .trim();
+      final correctIndex = data['correctIndex'] is num
+          ? (data['correctIndex'] as num).toInt()
+          : null;
+      final explanationRaw = (data['explanation'] ?? '').toString().trim();
+      final explanation = explanationRaw.isNotEmpty
+          ? explanationRaw
+          : (correctIndex != null &&
+                    correctIndex >= 0 &&
+                    correctIndex < options.length
+                ? 'Correct answer: ${options[correctIndex]}'
+                : 'Answer submitted.');
+      final ownerUid = (data['uid'] ?? '').toString();
+      final ownerName = (data['name'] ?? '').toString().trim();
+      final ownerUsername = (data['username'] ?? '').toString().trim();
+      return _DailyPracticeQuestion(
+        id: doc.id,
+        source: source,
+        content: content,
+        options: options,
+        correctIndex: correctIndex,
+        explanation: explanation,
+        stream: stream.isEmpty ? 'General' : stream,
+        ownerUid: ownerUid,
+        ownerName: ownerName,
+        ownerUsername: ownerUsername,
+      );
+    }).where((q) => q.content.isNotEmpty && q.options.length >= 2).toList();
+  }
+
+  Future<bool> _isUnansweredForCurrentUser(_DailyPracticeQuestion q) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return false;
+
+    if (q.source == 'quizzes') {
+      final snap = await FirebaseFirestore.instance
+          .collection('quizzes')
+          .doc(q.id)
+          .collection('attempts')
+          .doc(uid)
+          .get();
+      return !snap.exists;
+    }
+    if (q.source == 'polls') {
+      final snap = await FirebaseFirestore.instance
+          .collection('polls')
+          .doc(q.id)
+          .collection('votes')
+          .doc(uid)
+          .get();
+      return !snap.exists;
+    }
+    if (q.source == 'questions') {
+      final snap = await FirebaseFirestore.instance
+          .collection('questions')
+          .doc(q.id)
+          .collection('users')
+          .doc(uid)
+          .get();
+      return !snap.exists;
+    }
+    return false;
+  }
+
+  Future<List<_DailyPracticeQuestion>> _fetchDailyQuestions() async {
+    final rng = math.Random();
+    final targetCount = 4 + rng.nextInt(9); // 4..12
+
+    final merged = <_DailyPracticeQuestion>[
+      ...await _fetchCollectionQuestions('questions', 'questions', 90),
+      ...await _fetchCollectionQuestions('quizzes', 'quizzes', 90),
+      ...await _fetchCollectionQuestions('polls', 'polls', 90),
+    ];
+
+    final dedup = <String, _DailyPracticeQuestion>{};
+    for (final q in merged) {
+      dedup['${q.source}_${q.id}'] = q;
+    }
+    final pool = dedup.values.toList();
+    if (pool.isEmpty) return const [];
+
+    final unansweredPool = <_DailyPracticeQuestion>[];
+    for (final q in pool) {
+      if (await _isUnansweredForCurrentUser(q)) {
+        unansweredPool.add(q);
+      }
+    }
+    final effectivePool = unansweredPool.isNotEmpty ? unansweredPool : pool;
+
+    effectivePool.sort((a, b) => a.id.compareTo(b.id));
+    effectivePool.shuffle(rng);
+
+    final byStream = <String, List<_DailyPracticeQuestion>>{};
+    for (final q in effectivePool) {
+      byStream.putIfAbsent(q.stream, () => []).add(q);
+    }
+
+    final chosen = <_DailyPracticeQuestion>[];
+    final streamKeys = byStream.keys.toList()..shuffle(rng);
+    for (final key in streamKeys) {
+      final list = byStream[key]!;
+      if (list.isEmpty) continue;
+      chosen.add(list.removeAt(0));
+      if (chosen.length >= targetCount) break;
+    }
+
+    if (chosen.length < targetCount) {
+      final used = chosen.map((e) => e.localKey).toSet();
+      for (final q in effectivePool) {
+        if (used.contains(q.localKey)) continue;
+        chosen.add(q);
+        if (chosen.length >= targetCount) break;
+      }
+    }
+    if (chosen.length < 4 && effectivePool.length >= 4) {
+      final used = chosen.map((e) => e.localKey).toSet();
+      for (final q in effectivePool) {
+        if (used.contains(q.localKey)) continue;
+        chosen.add(q);
+        if (chosen.length >= 4) break;
+      }
+    }
+    return chosen.take(math.min(12, chosen.length)).toList();
+  }
+
+  String? _postCollection(_DailyPracticeQuestion q) {
+    if (q.source == 'questions') return 'questions';
+    if (q.source == 'quizzes') return 'quizzes';
+    if (q.source == 'polls') return 'polls';
+    return null;
+  }
+
+  String _typeLabel(_DailyPracticeQuestion q) {
+    if (q.source == 'quizzes') return 'quiz';
+    if (q.source == 'polls') return 'poll';
+    return 'question';
+  }
+
+  String _answerCountLabel(_DailyPracticeQuestion q, int count) {
+    if (q.source == 'polls') return '$count votes';
+    if (q.source == 'quizzes') return '$count answers';
+    return '$count answers';
+  }
+
+  String _detailType(_DailyPracticeQuestion q) {
+    if (q.source == 'quizzes') return 'Quiz';
+    if (q.source == 'polls') return 'Poll';
+    return 'Question';
+  }
+
+  Future<void> _toggleLike(_DailyPracticeQuestion q) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final collection = _postCollection(q);
+    if (uid == null || collection == null) return;
+
+    final postRef = FirebaseFirestore.instance.collection(collection).doc(q.id);
+    final likeRef = postRef.collection('likes').doc(uid);
+    final liked = (await likeRef.get()).exists;
+
+    await FirebaseFirestore.instance.runTransaction((tx) async {
+      if (liked) {
+        tx.delete(likeRef);
+      } else {
+        tx.set(likeRef, {'uid': uid});
+      }
+      tx.update(postRef, {'likes': FieldValue.increment(liked ? -1 : 1)});
+    });
+
+    final ownerUid = q.ownerUid;
+    if (ownerUid.isEmpty || ownerUid == uid) return;
+    if (liked) {
+      await NotificationHelper.removeLikeActivity(
+        targetUid: ownerUid,
+        actorUid: uid,
+        postId: q.id,
+        postType: collection,
+      );
+      return;
+    }
+
+    final myName = await _dailyCurrentUserLabel();
+    final likeLabel = _typeLabel(q);
+    await NotificationHelper.upsertLikeActivity(
+      targetUid: ownerUid,
+      title: '$myName likes your $likeLabel.',
+      actorUid: uid,
+      postId: q.id,
+      postType: collection,
+      content: q.content,
+    );
+  }
+
+  Future<void> _submitAnswer(int optionIndex) async {
+    if (_questions.isEmpty) return;
+    final q = _questions[_currentIndex];
+    if (_answers.containsKey(q.localKey)) return;
+    setState(() => _answers[q.localKey] = optionIndex);
+    await _persistAnswers();
+
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    if (q.source == 'quizzes') {
+      final userRef = FirebaseFirestore.instance
+          .collection('quizzes')
+          .doc(q.id)
+          .collection('attempts')
+          .doc(uid);
+      if (!(await userRef.get()).exists) {
+        await userRef.set({'index': optionIndex});
+        await FirebaseFirestore.instance
+            .collection('quizzes')
+            .doc(q.id)
+            .update({'answeredCount': FieldValue.increment(1)});
+        if (q.ownerUid.isNotEmpty && q.ownerUid != uid) {
+          final myName = await _dailyCurrentUserLabel();
+          await NotificationHelper.addActivity(
+            targetUid: q.ownerUid,
+            type: 'vote',
+            title: '$myName answered your quiz.',
+            actorUid: uid,
+            postId: q.id,
+            postType: 'quiz',
+            content: q.content,
+          );
+        }
+      }
+      return;
+    }
+
+    if (q.source == 'polls') {
+      final userRef = FirebaseFirestore.instance
+          .collection('polls')
+          .doc(q.id)
+          .collection('votes')
+          .doc(uid);
+      if (!(await userRef.get()).exists) {
+        await userRef.set({'option': q.options[optionIndex]});
+        await FirebaseFirestore.instance
+            .collection('polls')
+            .doc(q.id)
+            .update({'answeredCount': FieldValue.increment(1)});
+        if (q.ownerUid.isNotEmpty && q.ownerUid != uid) {
+          final myName = await _dailyCurrentUserLabel();
+          await NotificationHelper.addActivity(
+            targetUid: q.ownerUid,
+            type: 'vote',
+            title: '$myName votes on your poll.',
+            actorUid: uid,
+            postId: q.id,
+            postType: 'poll',
+            content: q.content,
+          );
+        }
+      }
+      return;
+    }
+
+    if (q.source == 'questions') {
+      final userRef = FirebaseFirestore.instance
+          .collection('questions')
+          .doc(q.id)
+          .collection('users')
+          .doc(uid);
+      if (!(await userRef.get()).exists) {
+        await userRef.set({'option': q.options[optionIndex]});
+        await FirebaseFirestore.instance
+            .collection('questions')
+            .doc(q.id)
+            .update({'answeredCount': FieldValue.increment(1)});
+        if (q.ownerUid.isNotEmpty && q.ownerUid != uid) {
+          final myName = await _dailyCurrentUserLabel();
+          await NotificationHelper.addActivity(
+            targetUid: q.ownerUid,
+            type: 'answer',
+            title: '$myName answered your question.',
+            actorUid: uid,
+            postId: q.id,
+            postType: 'question',
+            content: q.content,
+          );
+        }
+      }
+    }
+  }
+
+  void _nextQuestion() {
+    if (_currentIndex >= _questions.length - 1) {
+      Navigator.pop(context);
+      return;
+    }
+    setState(() => _currentIndex += 1);
+  }
+
+  void _previousQuestion() {
+    if (_currentIndex <= 0) return;
+    setState(() => _currentIndex -= 1);
+  }
+
+  void _handleScreenTap(TapUpDetails details) {
+    if (_suppressNavigationTap) {
+      _suppressNavigationTap = false;
+      return;
+    }
+    final width = MediaQuery.of(context).size.width;
+    if (details.localPosition.dx < width / 2) {
+      _previousQuestion();
+    } else {
+      _nextQuestion();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0C1020),
+      body: FutureBuilder<void>(
+        future: _initFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (_questions.isEmpty) {
+            return const Center(
+              child: Text('No daily questions available right now.'),
+            );
+          }
+
+          final q = _questions[_currentIndex];
+          final selected = _answers[q.localKey];
+          final answered = selected != null;
+
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapUp: _handleScreenTap,
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Color(0xFF1A2364), Color(0xFF090D1A)],
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: -80,
+                  right: -60,
+                  child: ImageFiltered(
+                    imageFilter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
+                    child: Container(
+                      width: 180,
+                      height: 180,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.12),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                ),
+                SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: List.generate(_questions.length, (i) {
+                            return Expanded(
+                              child: Container(
+                                height: 3,
+                                margin: const EdgeInsets.symmetric(horizontal: 2),
+                                decoration: BoxDecoration(
+                                  color: i <= _currentIndex
+                                      ? Colors.white
+                                      : Colors.white.withOpacity(0.25),
+                                  borderRadius: BorderRadius.circular(99),
+                                ),
+                              ),
+                            );
+                          }),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            IconButton(
+                              onPressed: () => Navigator.pop(context),
+                              icon: const Icon(Icons.close, color: Colors.white),
+                            ),
+                            const Spacer(),
+                            Text(
+                              'Daily Practice',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.92),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(
+                              '${_currentIndex + 1}/${_questions.length}',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.86),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Flexible(
+                          fit: FlexFit.loose,
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.10),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.22),
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: InkWell(
+                                        borderRadius: BorderRadius.circular(999),
+                                        onTap: q.ownerUid.isEmpty
+                                            ? null
+                                            : () {
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (_) =>
+                                                        ProfileScreen(
+                                                      uid: q.ownerUid,
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                        child: Row(
+                                          children: [
+                                            CircleAvatar(
+                                              radius: 13,
+                                              backgroundColor:
+                                                  Colors.white.withOpacity(
+                                                    0.22,
+                                                  ),
+                                              child: Text(
+                                                (q.ownerName.isNotEmpty
+                                                        ? q.ownerName
+                                                        : q.ownerUsername
+                                                                  .isNotEmpty
+                                                            ? q.ownerUsername
+                                                            : 'G')[0]
+                                                    .toUpperCase(),
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    q.ownerName.isNotEmpty
+                                                        ? q.ownerName
+                                                        : (q.ownerUsername
+                                                                  .isNotEmpty
+                                                              ? q.ownerUsername
+                                                              : 'Gyanika'),
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 12,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
+                                                  ),
+                                                  Text(
+                                                    q.ownerUsername.isNotEmpty
+                                                        ? '@${q.ownerUsername}'
+                                                        : '@gyanika',
+                                                    style: TextStyle(
+                                                      color: Colors.white
+                                                          .withOpacity(0.78),
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    _BlurStatusChip(
+                                      text: q.stream,
+                                      icon: Iconsax.category,
+                                      dark: true,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    _BlurStatusChip(
+                                      text: q.source,
+                                      icon: Iconsax.document_text,
+                                      dark: true,
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 14),
+                                Text(
+                                  'Q. ${q.content}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Flexible(
+                                  fit: FlexFit.loose,
+                                  child: ListView.separated(
+                                    shrinkWrap: true,
+                                    physics:
+                                        const NeverScrollableScrollPhysics(),
+                                    itemCount: q.options.length,
+                                    separatorBuilder: (_, _) =>
+                                        const SizedBox(height: 10),
+                                    itemBuilder: (context, i) {
+                                      final isSelected = selected == i;
+                                      final hasCorrect = q.correctIndex != null &&
+                                          q.correctIndex! >= 0 &&
+                                          q.correctIndex! < q.options.length &&
+                                          q.source != 'polls';
+                                      final isCorrect = hasCorrect && q.correctIndex == i;
+                                      final isWrongSelected =
+                                          answered && isSelected && !isCorrect && hasCorrect;
+
+                                      Color tileColor = Colors.white.withOpacity(0.12);
+                                      Color tileBorderColor = Colors.white.withOpacity(0.25);
+
+                                      if (answered) {
+                                        if (isCorrect) {
+                                          tileColor = Colors.green.withOpacity(0.24);
+                                          tileBorderColor = Colors.greenAccent.withOpacity(0.9);
+                                        } else if (isWrongSelected) {
+                                          tileColor = Colors.red.withOpacity(0.24);
+                                          tileBorderColor = Colors.redAccent.withOpacity(0.9);
+                                        } else if (!hasCorrect && isSelected) {
+                                          tileColor = Colors.indigo.withOpacity(0.35);
+                                          tileBorderColor = Colors.indigoAccent.withOpacity(0.9);
+                                        }
+                                      } else if (isSelected) {
+                                        tileColor = q.source == 'polls'
+                                            ? Colors.indigo.withOpacity(0.35)
+                                            : Colors.red.withOpacity(0.82);
+                                        tileBorderColor = q.source == 'polls'
+                                            ? Colors.indigoAccent.withOpacity(0.9)
+                                            : Colors.red.shade100;
+                                      }
+
+                                      return GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        onTapDown: (_) {
+                                          _suppressNavigationTap = true;
+                                        },
+                                        onTap: answered
+                                            ? null
+                                            : () async {
+                                                await _submitAnswer(i);
+                                              },
+                                        child: Container(
+                                          padding: const EdgeInsets.all(12),
+                                          decoration: BoxDecoration(
+                                            color: tileColor,
+                                            borderRadius: BorderRadius.circular(
+                                              14,
+                                            ),
+                                            border: Border.all(
+                                              color: tileBorderColor,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            q.options[i],
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Builder(
+                                  builder: (context) {
+                                    final collection = _postCollection(q);
+                                    if (collection == null) {
+                                      return Row(
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Icon(
+                                                Icons.favorite_border,
+                                                color: Colors.white.withOpacity(
+                                                  0.75,
+                                                ),
+                                                size: 18,
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                '0',
+                                                style: TextStyle(
+                                                  color: Colors.white.withOpacity(
+                                                    0.85,
+                                                  ),
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const Spacer(),
+                                          Text(
+                                            _answerCountLabel(
+                                              q,
+                                              answered ? 1 : 0,
+                                            ),
+                                            style: TextStyle(
+                                              color: Colors.white.withOpacity(
+                                                0.8,
+                                              ),
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    }
+
+                                    final postRef = FirebaseFirestore.instance
+                                        .collection(collection)
+                                        .doc(q.id);
+                                    final likeRef = postRef
+                                        .collection('likes')
+                                        .doc(_uid);
+
+                                    return StreamBuilder<DocumentSnapshot>(
+                                      stream: postRef.snapshots(),
+                                      builder: (context, postSnap) {
+                                        final postData = postSnap.data?.data()
+                                                as Map<String, dynamic>? ??
+                                            const {};
+                                        final likes =
+                                            (postData['likes'] as num?)
+                                                ?.toInt() ??
+                                            0;
+                                        final answers =
+                                            (postData['answeredCount'] as num?)
+                                                ?.toInt() ??
+                                            0;
+
+                                        return StreamBuilder<DocumentSnapshot>(
+                                          stream: likeRef.snapshots(),
+                                          builder: (context, likeSnap) {
+                                            final liked =
+                                                likeSnap.data?.exists ?? false;
+                                            return Row(
+                                              children: [
+                                                IconButton(
+                                                  visualDensity:
+                                                      VisualDensity.compact,
+                                                  padding: EdgeInsets.zero,
+                                                  constraints:
+                                                      const BoxConstraints(),
+                                                  onPressed: () async {
+                                                    _suppressNavigationTap =
+                                                        true;
+                                                    await _toggleLike(q);
+                                                  },
+                                                  icon: Icon(
+                                                    liked
+                                                        ? Icons.favorite
+                                                        : Icons.favorite_border,
+                                                    color: liked
+                                                        ? Colors.pinkAccent
+                                                        : Colors.white
+                                                              .withOpacity(
+                                                                0.85,
+                                                              ),
+                                                    size: 20,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 6),
+                                                Text(
+                                                  likes.toString(),
+                                                  style: TextStyle(
+                                                    color: Colors.white
+                                                        .withOpacity(0.88),
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                                const Spacer(),
+                                                GestureDetector(
+                                                  onTapDown: (_) {
+                                                    _suppressNavigationTap =
+                                                        true;
+                                                  },
+                                                  onTap: () {
+                                                    Navigator.push(
+                                                      context,
+                                                      MaterialPageRoute(
+                                                        builder: (_) =>
+                                                            PostDetailScreen(
+                                                          postId: q.id,
+                                                          collection: collection,
+                                                          type: _detailType(q),
+                                                        ),
+                                                      ),
+                                                    );
+                                                  },
+                                                  child: Text(
+                                                    _answerCountLabel(q, answers),
+                                                    style: TextStyle(
+                                                      color: Colors.white
+                                                          .withOpacity(0.82),
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            );
+                                          },
+                                        );
+                                      },
+                                    );
+                                  },
+                                ),
+                                const SizedBox(height: 10),
+                                Center(
+                                  child: Text(
+                                    'Tap left for previous, right for next',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: Colors.grey.shade500,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        if (answered && q.explanation.trim().isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.25),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.2),
+                              ),
+                            ),
+                            child: Text(
+                              q.explanation,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _BlurStatusChip extends StatelessWidget {
+  final String text;
+  final IconData icon;
+  final bool dark;
+
+  const _BlurStatusChip({
+    required this.text,
+    required this.icon,
+    this.dark = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(999),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: dark
+                ? Colors.white.withOpacity(0.15)
+                : Theme.of(context).colorScheme.primary.withOpacity(0.14),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: dark
+                  ? Colors.white.withOpacity(0.26)
+                  : Theme.of(context).colorScheme.primary.withOpacity(0.25),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 13,
+                color: dark
+                    ? Colors.white
+                    : Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 5),
+              Text(
+                text,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: dark
+                      ? Colors.white
+                      : Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
