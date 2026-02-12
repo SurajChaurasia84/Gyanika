@@ -27,19 +27,47 @@ class _HomeSectionState extends State<HomeSection> {
   StreamSubscription<DocumentSnapshot>? _userSub;
   String _streamText = 'Select Stream';
   String _profileLetter = '?';
-
-  Stream<QuerySnapshot> recommendedCoursesStream() {
-    return FirebaseFirestore.instance
-        .collection('courses')
-        .where('published', isEqualTo: true)
-        .orderBy('createdAt', descending: true)
-        .limit(6)
-        .snapshots();
-  }
+  final PageController _heroCardsController = PageController(
+    viewportFraction: 0.9,
+    initialPage: 1000,
+  );
+  Timer? _heroCardsTimer;
+  final ValueNotifier<int> _heroCardIndex = ValueNotifier<int>(0);
+  final List<_HeroCardData> _heroCards = const [
+    _HeroCardData(
+      title: 'Daily Practice',
+      subtitle: 'Solve quick quizzes and keep your streak alive.',
+      icon: Iconsax.flash_1,
+      colors: [Color(0xFF3257D5), Color(0xFF5E7CFF)],
+    ),
+    _HeroCardData(
+      title: 'Mock Tests',
+      subtitle: 'Build exam confidence with timed full-length tests.',
+      icon: Iconsax.clipboard_tick,
+      colors: [Color(0xFF0F8D7F), Color(0xFF2CB8A8)],
+    ),
+    _HeroCardData(
+      title: 'Revision Zone',
+      subtitle: 'Revise smartly with focused, high-yield concepts.',
+      icon: Iconsax.book_saved,
+      colors: [Color(0xFFC15C09), Color(0xFFF08F2E)],
+    ),
+    _HeroCardData(
+      title: 'Recommended For You',
+      subtitle: 'Explore personalized courses picked for your learning path.',
+      icon: Iconsax.star_1,
+      colors: [Color(0xFF6A3FB3), Color(0xFF9A65E5)],
+      action: _HeroCardAction.recommended,
+    ),
+  ];
 
   @override
   void initState() {
     super.initState();
+    if (_heroCards.isNotEmpty) {
+      _heroCardIndex.value =
+          _heroCardsController.initialPage % _heroCards.length;
+    }
     _settingsBox = Hive.box('settings');
     final cached = _settingsBox.get('preference_stream');
     if (cached is String && cached.trim().isNotEmpty) {
@@ -80,10 +108,14 @@ class _HomeSectionState extends State<HomeSection> {
         _settingsBox.put('profile_letter', letter);
       }
     });
+    _startHeroCardsAutoLoop();
   }
 
   @override
   void dispose() {
+    _heroCardsTimer?.cancel();
+    _heroCardsController.dispose();
+    _heroCardIndex.dispose();
     _userSub?.cancel();
     super.dispose();
   }
@@ -288,8 +320,8 @@ class _HomeSectionState extends State<HomeSection> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _followedUsersSection(theme),
-            const SizedBox(height: 10),
+            _heroCardsSlider(theme),
+            const SizedBox(height: 14),
             StreamBuilder<DocumentSnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('users')
@@ -336,13 +368,89 @@ class _HomeSectionState extends State<HomeSection> {
                 );
               },
             ),
-            const SizedBox(height: 16),
-            _sectionTitle('Recommended For You', theme),
-            const SizedBox(height: 14),
-            _gridCards(theme),
           ],
         ),
       ),
+    );
+  }
+
+  void _startHeroCardsAutoLoop() {
+    _heroCardsTimer?.cancel();
+    _heroCardsTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!mounted || !_heroCardsController.hasClients || _heroCards.isEmpty) {
+        return;
+      }
+      final currentPage =
+          _heroCardsController.page?.round() ?? _heroCardsController.initialPage;
+      final nextPage = currentPage + 1;
+      _heroCardsController.animateToPage(
+        nextPage,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
+  Widget _heroCardsSlider(ThemeData theme) {
+    if (_heroCards.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      children: [
+        SizedBox(
+          height: 170,
+          child: PageView.builder(
+            controller: _heroCardsController,
+            itemBuilder: (context, index) {
+              final card = _heroCards[index % _heroCards.length];
+              return Padding(
+                padding: const EdgeInsets.only(right: 10),
+                child: _HeroCardView(
+                  card: card,
+                  theme: theme,
+                  onTap: () {
+                    if (card.action == _HeroCardAction.recommended) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const RecommendedCoursesScreen(),
+                        ),
+                      );
+                    }
+                  },
+                ),
+              );
+            },
+            onPageChanged: (index) {
+              _heroCardIndex.value = index % _heroCards.length;
+            },
+          ),
+        ),
+        const SizedBox(height: 10),
+        ValueListenableBuilder<int>(
+          valueListenable: _heroCardIndex,
+          builder: (context, activeIndex, _) {
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(_heroCards.length, (index) {
+                final isActive = index == activeIndex;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 280),
+                  curve: Curves.easeOutCubic,
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  width: isActive ? 18 : 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    color: isActive
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.outline.withOpacity(0.4),
+                  ),
+                );
+              }),
+            );
+          },
+        ),
+      ],
     );
   }
 
@@ -357,63 +465,6 @@ class _HomeSectionState extends State<HomeSection> {
                       context,
                     ).colorScheme.onSurface.withOpacity(.6),
       ),
-    );
-  }
-
-  Widget _followedUsersSection(ThemeData theme) {
-    final ref = FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .collection('following')
-        .orderBy('time', descending: true);
-
-    return StreamBuilder<QuerySnapshot>(
-      stream: ref.snapshots(),
-      builder: (context, snap) {
-        if (!snap.hasData) return const SizedBox.shrink();
-        final docs = snap.data!.docs;
-        if (docs.isEmpty) return const SizedBox.shrink();
-
-        final visible = docs.take(8).toList();
-        final showAll = docs.length > visible.length;
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _sectionTitle('Persons you followed', theme),
-                if (showAll)
-                  TextButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const FollowedUsersScreen(),
-                        ),
-                      );
-                    },
-                    child: const Text('Show all'),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              height: 85,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: visible.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 0),
-                itemBuilder: (context, i) {
-                  final targetUid = visible[i].id;
-                  return _FollowedUserAvatar(uid: targetUid);
-                },
-              ),
-            ),
-          ],
-        );
-      },
     );
   }
 
@@ -450,118 +501,6 @@ class _HomeSectionState extends State<HomeSection> {
     );
   }
 
-  Widget _gridCards(ThemeData theme) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: recommendedCoursesStream(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(child: Text("No courses found"));
-        }
-
-        final courses = snapshot.data!.docs;
-
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: courses.length,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            mainAxisSpacing: 14,
-            crossAxisSpacing: 14,
-            childAspectRatio: 0.9,
-          ),
-          itemBuilder: (context, index) {
-            final course = courses[index];
-
-            return GestureDetector(
-              onTap: () {
-                final courseData =
-                    courses[index].data() as Map<String, dynamic>;
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => CourseDetailScreen(courseData: courseData),
-                  ),
-                );
-              },
-
-              child: Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  color: theme.colorScheme.surface,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    /// STREAM
-                    Text(
-                      course['stream'],
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: theme.colorScheme.primary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    /// COURSE NAME
-                    Text(
-                      course['courseName'],
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: theme.colorScheme.onSurface,
-                      ),
-                    ),
-
-                    const SizedBox(height: 6),
-
-                    /// SUBTITLE
-                    Text(
-                      course['subtitle'],
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 13, color: theme.hintColor),
-                    ),
-
-                    const Spacer(),
-
-                    /// LEVEL BADGE
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        color: theme.colorScheme.primary.withOpacity(0.12),
-                      ),
-                      child: Text(
-                        course['level'],
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
 }
 
 class _HomeSubjectCard extends StatelessWidget {
@@ -671,44 +610,213 @@ class _HomeSubjectCard extends StatelessWidget {
   }
 }
 
-class SearchAllScreen extends StatefulWidget {
-  const SearchAllScreen({super.key});
+class _HeroCardData {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final List<Color> colors;
+  final _HeroCardAction? action;
 
-  @override
-  State<SearchAllScreen> createState() => _SearchAllScreenState();
+  const _HeroCardData({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.colors,
+    this.action,
+  });
 }
 
-class FollowedUsersScreen extends StatelessWidget {
-  const FollowedUsersScreen({super.key});
+enum _HeroCardAction { recommended }
+
+class _HeroCardView extends StatelessWidget {
+  final _HeroCardData card;
+  final ThemeData theme;
+  final VoidCallback? onTap;
+
+  const _HeroCardView({required this.card, required this.theme, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final myUid = FirebaseAuth.instance.currentUser!.uid;
-    final ref = FirebaseFirestore.instance
-        .collection('users')
-        .doc(myUid)
-        .collection('following')
-        .orderBy('time', descending: true);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: card.colors,
+            ),
+          ),
+          child: Stack(
+            children: [
+              Positioned(
+                right: -24,
+                top: -12,
+                child: Container(
+                  width: 110,
+                  height: 110,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(
+                      theme.brightness == Brightness.dark ? 0.08 : 0.16,
+                    ),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(card.icon, color: Colors.white, size: 20),
+                    ),
+                    const Spacer(),
+                    Text(
+                      card.title,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      card.subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.92),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class RecommendedCoursesScreen extends StatelessWidget {
+  const RecommendedCoursesScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final stream = FirebaseFirestore.instance
+        .collection('courses')
+        .where('published', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(12)
+        .snapshots();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Following')),
+      appBar: AppBar(title: const Text('Recommended For You')),
       body: StreamBuilder<QuerySnapshot>(
-        stream: ref.snapshots(),
-        builder: (context, snap) {
-          if (!snap.hasData) {
+        stream: stream,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          final docs = snap.data!.docs;
-          if (docs.isEmpty) {
-            return const Center(child: Text('No followed users'));
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return const Center(child: Text("No courses found"));
           }
 
-          return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-            itemCount: docs.length,
-            itemBuilder: (context, i) {
-              final targetUid = docs[i].id;
-              return _FollowedUserTile(uid: targetUid);
+          final courses = snapshot.data!.docs;
+          return GridView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+            itemCount: courses.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 14,
+              crossAxisSpacing: 14,
+              childAspectRatio: 0.9,
+            ),
+            itemBuilder: (context, index) {
+              final course = courses[index];
+              final courseData = course.data() as Map<String, dynamic>;
+              return GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CourseDetailScreen(courseData: courseData),
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    color: theme.colorScheme.surface,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        courseData['stream'] ?? '',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        courseData['courseName'] ?? '',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        courseData['subtitle'] ?? '',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 13, color: theme.hintColor),
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          color: theme.colorScheme.primary.withOpacity(0.12),
+                        ),
+                        child: Text(
+                          courseData['level'] ?? '',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
             },
           );
         },
@@ -717,99 +825,11 @@ class FollowedUsersScreen extends StatelessWidget {
   }
 }
 
-class _FollowedUserAvatar extends StatelessWidget {
-  final String uid;
-  const _FollowedUserAvatar({required this.uid});
+class SearchAllScreen extends StatefulWidget {
+  const SearchAllScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final userRef = FirebaseFirestore.instance.collection('users').doc(uid);
-
-    return StreamBuilder<DocumentSnapshot>(
-      stream: userRef.snapshots(),
-      builder: (context, snap) {
-        if (!snap.hasData) return const SizedBox.shrink();
-        final data = snap.data!.data() as Map<String, dynamic>? ?? {};
-        final name = (data['name'] ?? '').toString().trim();
-        final username = (data['username'] ?? '').toString().trim();
-        final display = name.isNotEmpty ? name : username;
-        final letter = display.isNotEmpty ? display[0].toUpperCase() : 'U';
-
-        return InkWell(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => ProfileScreen(uid: uid)),
-            );
-          },
-          child: SizedBox(
-            width: 82,
-            child: Column(
-              children: [
-                CircleAvatar(
-                  radius: 28,
-                  backgroundColor: Colors.indigo,
-                  child: Text(
-                    letter,
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  display.isNotEmpty ? display : 'User',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  softWrap: false,
-                  style: const TextStyle(fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _FollowedUserTile extends StatelessWidget {
-  final String uid;
-  const _FollowedUserTile({required this.uid});
-
-  @override
-  Widget build(BuildContext context) {
-    final userRef = FirebaseFirestore.instance.collection('users').doc(uid);
-
-    return StreamBuilder<DocumentSnapshot>(
-      stream: userRef.snapshots(),
-      builder: (context, snap) {
-        if (!snap.hasData) return const SizedBox.shrink();
-        final data = snap.data!.data() as Map<String, dynamic>? ?? {};
-        final name = (data['name'] ?? '').toString().trim();
-        final username = (data['username'] ?? '').toString().trim();
-        final display = name.isNotEmpty ? name : username;
-        final letter = display.isNotEmpty ? display[0].toUpperCase() : 'U';
-
-        return ListTile(
-          contentPadding: const EdgeInsets.symmetric(vertical: 4),
-          leading: CircleAvatar(
-            backgroundColor: Colors.indigo,
-            child: Text(
-              letter,
-              style: const TextStyle(color: Colors.white),
-            ),
-          ),
-          title: Text(display.isNotEmpty ? display : 'User'),
-          subtitle: Text(username.isNotEmpty ? '@$username' : ''),
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => ProfileScreen(uid: uid)),
-            );
-          },
-        );
-      },
-    );
-  }
+  State<SearchAllScreen> createState() => _SearchAllScreenState();
 }
 
 class _SearchAllScreenState extends State<SearchAllScreen> {
