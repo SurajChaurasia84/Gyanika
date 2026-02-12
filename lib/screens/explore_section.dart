@@ -109,10 +109,30 @@ class _ExploreSectionState extends State<ExploreSection> {
 
   Widget _exploreView() {
     final data = filteredStreams;
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 40),
-      children: data.entries.map((entry) {
+    final children = <Widget>[
+      InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+                  const SubjectScreen(subjectName: 'ABCD', stream: 'ABCD'),
+            ),
+          );
+        },
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: AspectRatio(
+            aspectRatio: 1920 / 480,
+            child: Image.asset('assets/src/wl.png', fit: BoxFit.cover),
+          ),
+        ),
+      ),
+      const SizedBox(height: 14),
+    ];
+    children.addAll(
+      data.entries.map((entry) {
         final subjects = entry.value;
         final showViewAll = subjects.length > 4;
         final isExpanded = expandedSections.contains(entry.key);
@@ -174,7 +194,12 @@ class _ExploreSectionState extends State<ExploreSection> {
             if (entry.key != data.keys.last) const SizedBox(height: 12),
           ],
         );
-      }).toList(),
+      }),
+    );
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 40),
+      children: children,
     );
   }
 }
