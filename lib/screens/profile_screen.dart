@@ -21,6 +21,104 @@ Future<String> _currentUserLabel() async {
   return 'Someone';
 }
 
+Future<void> _toggleFollowRelation({
+  required String myUid,
+  required String targetUid,
+  required bool isFollowing,
+}) async {
+  final batch = FirebaseFirestore.instance.batch();
+  final targetFollowerRef = FirebaseFirestore.instance
+      .collection('users')
+      .doc(targetUid)
+      .collection('followers')
+      .doc(myUid);
+  final myFollowingRef = FirebaseFirestore.instance
+      .collection('users')
+      .doc(myUid)
+      .collection('following')
+      .doc(targetUid);
+
+  if (isFollowing) {
+    batch.delete(targetFollowerRef);
+    batch.delete(myFollowingRef);
+    batch.set(
+      FirebaseFirestore.instance.collection('users').doc(targetUid),
+      {'followers': FieldValue.increment(-1)},
+      SetOptions(merge: true),
+    );
+    batch.set(
+      FirebaseFirestore.instance.collection('users').doc(myUid),
+      {'following': FieldValue.increment(-1)},
+      SetOptions(merge: true),
+    );
+  } else {
+    batch.set(targetFollowerRef, {'time': Timestamp.now()});
+    batch.set(myFollowingRef, {'time': Timestamp.now()});
+    batch.set(
+      FirebaseFirestore.instance.collection('users').doc(targetUid),
+      {'followers': FieldValue.increment(1)},
+      SetOptions(merge: true),
+    );
+    batch.set(
+      FirebaseFirestore.instance.collection('users').doc(myUid),
+      {'following': FieldValue.increment(1)},
+      SetOptions(merge: true),
+    );
+  }
+  await batch.commit();
+
+  if (myUid == targetUid) return;
+  if (isFollowing) {
+    await NotificationHelper.removeFollowActivity(
+      targetUid: targetUid,
+      actorUid: myUid,
+    );
+  } else {
+    final myName = await _currentUserLabel();
+    await NotificationHelper.upsertFollowActivity(
+      targetUid: targetUid,
+      title: '$myName started followed you',
+      actorUid: myUid,
+    );
+  }
+}
+
+Future<void> _removeFollowerRelation({
+  required String ownerUid,
+  required String followerUid,
+}) async {
+  final batch = FirebaseFirestore.instance.batch();
+  final ownerFollowerRef = FirebaseFirestore.instance
+      .collection('users')
+      .doc(ownerUid)
+      .collection('followers')
+      .doc(followerUid);
+  final followerFollowingRef = FirebaseFirestore.instance
+      .collection('users')
+      .doc(followerUid)
+      .collection('following')
+      .doc(ownerUid);
+
+  batch.delete(ownerFollowerRef);
+  batch.delete(followerFollowingRef);
+  batch.set(
+    FirebaseFirestore.instance.collection('users').doc(ownerUid),
+    {'followers': FieldValue.increment(-1)},
+    SetOptions(merge: true),
+  );
+  batch.set(
+    FirebaseFirestore.instance.collection('users').doc(followerUid),
+    {'following': FieldValue.increment(-1)},
+    SetOptions(merge: true),
+  );
+  await batch.commit();
+
+  await NotificationHelper.removeFollowActivity(
+    targetUid: ownerUid,
+    actorUid: followerUid,
+  );
+}
+
 class ProfileScreen extends StatefulWidget {
   final String? uid;
   const ProfileScreen({super.key, this.uid});
@@ -32,6 +130,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final ScrollController _profileScrollController = ScrollController();
   late final String uid;
   late final String myUid;
 
@@ -41,6 +140,25 @@ class _ProfileScreenState extends State<ProfileScreen>
     myUid = FirebaseAuth.instance.currentUser!.uid;
     uid = widget.uid ?? myUid;
     _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _profileScrollController.dispose();
+    super.dispose();
+  }
+
+  void _focusOnPosts() {
+    if (!_profileScrollController.hasClients) return;
+    final targetOffset = _profileScrollController.position.maxScrollExtent > 220
+        ? 220.0
+        : _profileScrollController.position.maxScrollExtent;
+    _profileScrollController.animateTo(
+      targetOffset,
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   @override
@@ -114,103 +232,142 @@ class _ProfileScreenState extends State<ProfileScreen>
               : null,
 
           body: SafeArea(
-            child: Column(
-              children: [
-                /// ================= PROFILE HEADER =================
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 36,
-                        backgroundColor: Colors.indigo,
-                        child: Text(
-                          (user['username'] ?? 'U')[0].toUpperCase(),
-                          style: const TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+            child: NestedScrollView(
+              controller: _profileScrollController,
+              headerSliverBuilder: (context, innerBoxIsScrolled) {
+                return [
+                  SliverToBoxAdapter(
+                    child: Column(
+                      children: [
+                        /// ================= PROFILE HEADER =================
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 36,
+                                backgroundColor: Colors.indigo,
+                                child: Text(
+                                  (user['username'] ?? 'U')[0].toUpperCase(),
+                                  style: const TextStyle(
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      user['name'] ?? '',
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      (user['bio'] ?? '').isNotEmpty
+                                          ? user['bio']
+                                          : 'No bio added',
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 14),
 
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              user['name'] ?? '',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
+                        /// ================= COUNTS ROW =================
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              _StatItem(
+                                label: "Posts",
+                                value: user['posts'] ?? 0,
+                                onTap: _focusOnPosts,
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              (user['bio'] ?? '').isNotEmpty
-                                  ? user['bio']
-                                  : 'No bio added',
-                              style: const TextStyle(
-                                fontSize: 13,
-                                color: Colors.grey,
+                              _StatItem(
+                                label: "Followers",
+                                value: user['followers'] ?? 0,
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => FollowedUsersScreen(
+                                        uid: uid,
+                                        showFollowers: true,
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
-                            ),
+                              _StatItem(
+                                label: "Following",
+                                value: user['following'] ?? 0,
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => FollowedUsersScreen(
+                                        uid: uid,
+                                        showFollowers: false,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                    ),
+                  ),
+                  SliverOverlapAbsorber(
+                    handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
+                      context,
+                    ),
+                    sliver: SliverPersistentHeader(
+                      pinned: true,
+                      delegate: _PinnedTabBarDelegate(
+                        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+                        tabBar: TabBar(
+                          controller: _tabController,
+                          indicatorColor: Colors.indigo,
+                          labelColor: Colors.indigo,
+                          unselectedLabelColor: Colors.grey,
+                          tabs: const [
+                            Tab(text: "Questions"),
+                            Tab(text: "Quizzes & Polls"),
                           ],
                         ),
                       ),
-                    ],
+                    ),
                   ),
-                ),
-
-                /// ================= COUNTS ROW =================
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _StatItem(label: "Posts", value: user['posts'] ?? 0),
-                      _StatItem(
-                        label: "Followers",
-                        value: user['followers'] ?? 0,
-                      ),
-                      _StatItem(
-                        label: "Following",
-                        value: user['following'] ?? 0,
-                      ),
-                    ],
+                ];
+              },
+              body: TabBarView(
+                controller: _tabController,
+                children: [
+                  _UserPostsList(
+                    collection: 'questions',
+                    uid: uid,
+                    emptyText: "No questions yet",
                   ),
-                ),
-
-                const SizedBox(height: 12),
-
-                /// ================= TABS =================
-                TabBar(
-                  controller: _tabController,
-                  indicatorColor: Colors.indigo,
-                  labelColor: Colors.indigo,
-                  unselectedLabelColor: Colors.grey,
-                  tabs: const [
-                    Tab(text: "Questions"),
-                    Tab(text: "Quizzes & Polls"),
-                  ],
-                ),
-
-                /// ================= TAB CONTENT =================
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _UserPostsList(
-                        collection: 'questions',
-                        uid: uid,
-                        emptyText: "No questions yet",
-                      ),
-                      _MixedPostsList(uid: uid),
-                    ],
-                  ),
-                ),
-              ],
+                  _MixedPostsList(uid: uid),
+                ],
+              ),
             ),
           ),
         );
@@ -340,20 +497,25 @@ class _UserPostsList extends StatelessWidget {
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return Center(
-            child: Text(
+          return _buildInfoScroll(
+            context,
+            child: const Text(
               'Failed to load questions',
-              style: const TextStyle(color: Colors.grey),
+              style: TextStyle(color: Colors.grey),
             ),
           );
         }
 
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return _buildInfoScroll(
+            context,
+            child: const CircularProgressIndicator(),
+          );
         }
 
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return Center(
+          return _buildInfoScroll(
+            context,
             child: Text(emptyText, style: const TextStyle(color: Colors.grey)),
           );
         }
@@ -370,34 +532,69 @@ class _UserPostsList extends StatelessWidget {
             return bTs.compareTo(aTs);
           });
 
-        return ListView.separated(
-          padding: const EdgeInsets.all(12),
-          itemCount: docs.length,
-          separatorBuilder: (_, _) => const SizedBox(height: 10),
-          itemBuilder: (context, i) {
-            final data = docs[i].data() as Map<String, dynamic>;
-            final postId = docs[i].id;
-            return _PostCard(
-              title: data['content'] ?? '',
-              category: data['category'] ?? '',
-              type: 'Question',
-              likes: (data['likes'] ?? 0) as int,
-              answered: (data['answeredCount'] ?? 0) as int,
-              createdAt: data['createdAt'] as Timestamp?,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => PostDetailScreen(
-                      postId: postId,
-                      collection: 'questions',
-                      type: 'Question',
-                    ),
+        return Builder(
+          builder: (innerContext) {
+            return CustomScrollView(
+              slivers: [
+                SliverOverlapInjector(
+                  handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
+                    innerContext,
                   ),
-                );
-              },
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.all(12),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      if (index.isOdd) return const SizedBox(height: 10);
+                      final i = index ~/ 2;
+                      final data = docs[i].data() as Map<String, dynamic>;
+                      final postId = docs[i].id;
+                      return _PostCard(
+                        title: data['content'] ?? '',
+                        category: data['category'] ?? '',
+                        type: 'Question',
+                        likes: (data['likes'] ?? 0) as int,
+                        answered: (data['answeredCount'] ?? 0) as int,
+                        createdAt: data['createdAt'] as Timestamp?,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => PostDetailScreen(
+                                postId: postId,
+                                collection: 'questions',
+                                type: 'Question',
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    }, childCount: docs.length * 2 - 1),
+                  ),
+                ),
+              ],
             );
           },
+        );
+      },
+    );
+  }
+
+  Widget _buildInfoScroll(BuildContext context, {required Widget child}) {
+    return Builder(
+      builder: (innerContext) {
+        return CustomScrollView(
+          slivers: [
+            SliverOverlapInjector(
+              handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
+                innerContext,
+              ),
+            ),
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(child: child),
+            ),
+          ],
         );
       },
     );
@@ -408,19 +605,291 @@ class _UserPostsList extends StatelessWidget {
 class _StatItem extends StatelessWidget {
   final String label;
   final int value;
+  final VoidCallback? onTap;
 
-  const _StatItem({required this.label, required this.value});
+  const _StatItem({required this.label, required this.value, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(
-          value.toString(),
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        child: Column(
+          children: [
+            Text(
+              value.toString(),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            Text(label, style: const TextStyle(fontSize: 12)),
+          ],
         ),
-        Text(label, style: const TextStyle(fontSize: 12)),
-      ],
+      ),
+    );
+  }
+}
+
+class _PinnedTabBarDelegate extends SliverPersistentHeaderDelegate {
+  final TabBar tabBar;
+  final Color backgroundColor;
+
+  _PinnedTabBarDelegate({required this.tabBar, required this.backgroundColor});
+
+  @override
+  double get minExtent => tabBar.preferredSize.height;
+
+  @override
+  double get maxExtent => tabBar.preferredSize.height;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return Container(
+      color: backgroundColor,
+      child: tabBar,
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _PinnedTabBarDelegate oldDelegate) {
+    return oldDelegate.tabBar != tabBar ||
+        oldDelegate.backgroundColor != backgroundColor;
+  }
+}
+
+class FollowedUsersScreen extends StatefulWidget {
+  final String uid;
+  final bool showFollowers;
+
+  const FollowedUsersScreen({
+    super.key,
+    required this.uid,
+    required this.showFollowers,
+  });
+
+  @override
+  State<FollowedUsersScreen> createState() => _FollowedUsersScreenState();
+}
+
+class _FollowedUsersScreenState extends State<FollowedUsersScreen> {
+  final List<String> _sessionFollowingIds = [];
+
+  void _mergeFollowingIds(List<String> latestIds) {
+    for (final id in latestIds) {
+      if (!_sessionFollowingIds.contains(id)) {
+        _sessionFollowingIds.add(id);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final uid = widget.uid;
+    final showFollowers = widget.showFollowers;
+    final relation = showFollowers ? 'followers' : 'following';
+    final title = showFollowers ? 'Followers' : 'Following';
+    final emptyText = showFollowers ? 'No followers' : 'No followed users';
+    final myUid = FirebaseAuth.instance.currentUser!.uid;
+    final canManage = uid == myUid;
+    final ref = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection(relation)
+        .orderBy('time', descending: true);
+
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: ref.snapshots(),
+        builder: (context, snap) {
+          if (!snap.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final docs = snap.data!.docs;
+          final latestIds = docs.map((e) => e.id).toList();
+
+          final shouldHoldFollowingList = canManage && !showFollowers;
+          if (shouldHoldFollowingList) {
+            _mergeFollowingIds(latestIds);
+          }
+          final idsToShow = shouldHoldFollowingList ? _sessionFollowingIds : latestIds;
+
+          if (idsToShow.isEmpty) {
+            return Center(child: Text(emptyText));
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+            itemCount: idsToShow.length,
+            itemBuilder: (context, i) {
+              final targetUid = idsToShow[i];
+              return _FollowedUserTile(
+                uid: targetUid,
+                ownerUid: uid,
+                canManage: canManage,
+                showFollowers: showFollowers,
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _FollowedUserTile extends StatelessWidget {
+  final String uid;
+  final String ownerUid;
+  final bool canManage;
+  final bool showFollowers;
+
+  const _FollowedUserTile({
+    required this.uid,
+    required this.ownerUid,
+    required this.canManage,
+    required this.showFollowers,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final userRef = FirebaseFirestore.instance.collection('users').doc(uid);
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: userRef.snapshots(),
+      builder: (context, snap) {
+        if (!snap.hasData) return const SizedBox.shrink();
+        final data = snap.data!.data() as Map<String, dynamic>? ?? {};
+        final name = (data['name'] ?? '').toString().trim();
+        final username = (data['username'] ?? '').toString().trim();
+        final display = name.isNotEmpty ? name : username;
+        final letter = display.isNotEmpty ? display[0].toUpperCase() : 'U';
+
+        return ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: CircleAvatar(
+            backgroundColor: Colors.indigo,
+            child: Text(letter, style: const TextStyle(color: Colors.white)),
+          ),
+          title: Text(display.isNotEmpty ? display : 'User'),
+          subtitle: Text(username.isNotEmpty ? '@$username' : ''),
+          trailing: canManage
+              ? (showFollowers
+                    ? _RemoveFollowerButton(ownerUid: ownerUid, followerUid: uid)
+                    : _InlineFollowButton(targetUid: uid))
+              : null,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => ProfileScreen(uid: uid)),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _InlineFollowButton extends StatelessWidget {
+  final String targetUid;
+  const _InlineFollowButton({required this.targetUid});
+
+  @override
+  Widget build(BuildContext context) {
+    final myUid = FirebaseAuth.instance.currentUser!.uid;
+    if (myUid == targetUid) return const SizedBox.shrink();
+
+    final targetFollowerRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(targetUid)
+        .collection('followers')
+        .doc(myUid);
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: targetFollowerRef.snapshots(),
+      builder: (_, snap) {
+        final isFollowing = snap.data?.exists ?? false;
+        return InkWell(
+          onTap: () async {
+            await _toggleFollowRelation(
+              myUid: myUid,
+              targetUid: targetUid,
+              isFollowing: isFollowing,
+            );
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: isFollowing ? Colors.grey.shade200 : Colors.indigo,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Text(
+              isFollowing ? 'Following' : 'Follow',
+              style: TextStyle(
+                fontSize: 12,
+                color: isFollowing ? Colors.black : Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _RemoveFollowerButton extends StatelessWidget {
+  final String ownerUid;
+  final String followerUid;
+
+  const _RemoveFollowerButton({
+    required this.ownerUid,
+    required this.followerUid,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final myUid = FirebaseAuth.instance.currentUser!.uid;
+    if (myUid != ownerUid || followerUid == ownerUid) {
+      return const SizedBox.shrink();
+    }
+
+    return TextButton(
+      onPressed: () async {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) {
+            return AlertDialog(
+              title: const Text('Remove follower?'),
+              content: const Text(
+                'This will remove this user from your followers.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: const Text('Remove'),
+                ),
+              ],
+            );
+          },
+        );
+        if (confirmed != true) return;
+        await _removeFollowerRelation(ownerUid: ownerUid, followerUid: followerUid);
+      },
+      style: TextButton.styleFrom(
+        foregroundColor: Colors.red,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      child: const Text('Remove'),
     );
   }
 }
@@ -470,59 +939,11 @@ class _ProfileFollowButton extends StatelessWidget {
           padding: const EdgeInsets.only(right: 8),
           child: InkWell(
             onTap: () async {
-              final batch = FirebaseFirestore.instance.batch();
-              final myRef = FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(myUid)
-                  .collection('following')
-                  .doc(targetUid);
-
-              if (isFollowing) {
-                batch.delete(ref);
-                batch.delete(myRef);
-                batch.set(
-                  FirebaseFirestore.instance.collection('users').doc(targetUid),
-                  {'followers': FieldValue.increment(-1)},
-                  SetOptions(merge: true),
-                );
-                batch.set(
-                  FirebaseFirestore.instance.collection('users').doc(myUid),
-                  {'following': FieldValue.increment(-1)},
-                  SetOptions(merge: true),
-                );
-              } else {
-                batch.set(ref, {'time': Timestamp.now()});
-                batch.set(myRef, {'time': Timestamp.now()});
-                batch.set(
-                  FirebaseFirestore.instance.collection('users').doc(targetUid),
-                  {'followers': FieldValue.increment(1)},
-                  SetOptions(merge: true),
-                );
-                batch.set(
-                  FirebaseFirestore.instance.collection('users').doc(myUid),
-                  {'following': FieldValue.increment(1)},
-                  SetOptions(merge: true),
-                );
-              }
-              await batch.commit();
-
-              if (myUid == targetUid) {
-                return;
-              }
-
-              if (isFollowing) {
-                await NotificationHelper.removeFollowActivity(
-                  targetUid: targetUid,
-                  actorUid: myUid,
-                );
-              } else {
-                final myName = await _currentUserLabel();
-                await NotificationHelper.upsertFollowActivity(
-                  targetUid: targetUid,
-                  title: '$myName started followed you',
-                  actorUid: myUid,
-                );
-              }
+              await _toggleFollowRelation(
+                myUid: myUid,
+                targetUid: targetUid,
+                isFollowing: isFollowing,
+              );
             },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -566,7 +987,10 @@ class _MixedPostsList extends StatelessWidget {
           builder: (context, pollSnap) {
             if (quizSnap.connectionState == ConnectionState.waiting ||
                 pollSnap.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return _buildInfoScroll(
+                context,
+                child: const CircularProgressIndicator(),
+              );
             }
 
             final quizDocs = quizSnap.data?.docs ?? [];
@@ -575,48 +999,84 @@ class _MixedPostsList extends StatelessWidget {
             final all = [...quizDocs, ...pollDocs];
 
             if (all.isEmpty) {
-              return const Center(
-                child: Text(
+              return _buildInfoScroll(
+                context,
+                child: const Text(
                   "No quizzes or polls yet",
                   style: TextStyle(color: Colors.grey),
                 ),
               );
             }
 
-            return ListView.separated(
-              padding: const EdgeInsets.all(12),
-              itemCount: all.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 10),
-              itemBuilder: (context, i) {
-                final data = all[i].data() as Map<String, dynamic>;
-                final type = (data['type'] ?? '').toString();
-                final isQuiz = type == 'quiz';
-                final postId = all[i].id;
-                final collection = isQuiz ? 'quizzes' : 'polls';
-
-                return _PostCard(
-                  title: 'Que. ${data['content'] ?? ''}',
-                  category: data['category'] ?? '',
-                  type: isQuiz ? 'Quiz' : 'Poll',
-                  likes: (data['likes'] ?? 0) as int,
-                  answered: (data['answeredCount'] ?? 0) as int,
-                  createdAt: data['createdAt'] as Timestamp?,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => PostDetailScreen(
-                          postId: postId,
-                          collection: collection,
-                          type: isQuiz ? 'Quiz' : 'Poll',
-                        ),
+            return Builder(
+              builder: (innerContext) {
+                return CustomScrollView(
+                  slivers: [
+                    SliverOverlapInjector(
+                      handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
+                        innerContext,
                       ),
-                    );
-                  },
+                    ),
+                    SliverPadding(
+                      padding: const EdgeInsets.all(12),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate((context, index) {
+                          if (index.isOdd) return const SizedBox(height: 10);
+                          final i = index ~/ 2;
+                          final data = all[i].data() as Map<String, dynamic>;
+                          final type = (data['type'] ?? '').toString();
+                          final isQuiz = type == 'quiz';
+                          final postId = all[i].id;
+                          final collection = isQuiz ? 'quizzes' : 'polls';
+
+                          return _PostCard(
+                            title: 'Que. ${data['content'] ?? ''}',
+                            category: data['category'] ?? '',
+                            type: isQuiz ? 'Quiz' : 'Poll',
+                            likes: (data['likes'] ?? 0) as int,
+                            answered: (data['answeredCount'] ?? 0) as int,
+                            createdAt: data['createdAt'] as Timestamp?,
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => PostDetailScreen(
+                                    postId: postId,
+                                    collection: collection,
+                                    type: isQuiz ? 'Quiz' : 'Poll',
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                        }, childCount: all.length * 2 - 1),
+                      ),
+                    ),
+                  ],
                 );
               },
             );
           },
+        );
+      },
+    );
+  }
+
+  Widget _buildInfoScroll(BuildContext context, {required Widget child}) {
+    return Builder(
+      builder: (innerContext) {
+        return CustomScrollView(
+          slivers: [
+            SliverOverlapInjector(
+              handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
+                innerContext,
+              ),
+            ),
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(child: child),
+            ),
+          ],
         );
       },
     );
