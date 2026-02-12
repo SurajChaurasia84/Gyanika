@@ -57,8 +57,7 @@ class _SubjectScreenState extends State<SubjectScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final showWelcomeImage = widget.subjectName.toUpperCase() == 'ABCD';
-    final isAbcd = showWelcomeImage;
+    final isAbcd = widget.subjectName.toUpperCase() == 'ABCD';
     return Scaffold(
       appBar: AppBar(
         elevation: 0,
@@ -69,16 +68,7 @@ class _SubjectScreenState extends State<SubjectScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           children: [
-            if (showWelcomeImage)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: AspectRatio(
-                  aspectRatio: 1920 / 480,
-                  child: Image.asset('assets/src/wl.png', fit: BoxFit.cover),
-                ),
-              ),
             if (isAbcd) ...[
-              const SizedBox(height: 16),
               Text(
                 'Choose Your Level',
                 style: TextStyle(
