@@ -11,6 +11,34 @@ import 'helpers/in_app_notification_service.dart';
 
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.system);
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
+const PageTransitionsTheme _appPageTransitionsTheme = PageTransitionsTheme(
+  builders: {
+    TargetPlatform.android: _AppFadePageTransitionsBuilder(),
+    TargetPlatform.iOS: _AppFadePageTransitionsBuilder(),
+    TargetPlatform.linux: _AppFadePageTransitionsBuilder(),
+    TargetPlatform.macOS: _AppFadePageTransitionsBuilder(),
+    TargetPlatform.windows: _AppFadePageTransitionsBuilder(),
+    TargetPlatform.fuchsia: _AppFadePageTransitionsBuilder(),
+  },
+);
+
+class _AppFadePageTransitionsBuilder extends PageTransitionsBuilder {
+  const _AppFadePageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    return FadeTransition(
+      opacity: CurvedAnimation(parent: animation, curve: Curves.easeInOut),
+      child: child,
+    );
+  }
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -68,6 +96,7 @@ class GyanikaApp extends StatelessWidget {
               primary: Colors.indigo,
               surface: Colors.white,
             ),
+            pageTransitionsTheme: _appPageTransitionsTheme,
           ),
 
           // 🌙 DARK
@@ -79,6 +108,7 @@ class GyanikaApp extends StatelessWidget {
               primary: Colors.indigo,
               surface: Color(0xFF151520),
             ),
+            pageTransitionsTheme: _appPageTransitionsTheme,
           ),
 
           home: const AuthGate(),
