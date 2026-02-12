@@ -19,22 +19,6 @@ class _PreferenceScreenState extends State<PreferenceScreen> {
   String? selectedStream;
 
   final Map<String, List<String>> streamPreferences = {
-    'LKG/UKG': ['ABCD', '0-9'],
-    'Class 1-5': [
-      'Hindi',
-      'English',
-      'Maths',
-      'Science',
-      'Environmental Studies',
-      'General Knowledge',
-      'Moral Science',
-    ],
-    'Class 6-8': [
-      'Hindi',
-      'English',
-      'Maths',
-      'Science',
-    ],
     'Class 9-10th': [
       'Hindi',
       'English',
