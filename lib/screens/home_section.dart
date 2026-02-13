@@ -41,7 +41,7 @@ class HomeSection extends StatefulWidget {
 class _HomeSectionState extends State<HomeSection> {
   final String uid = FirebaseAuth.instance.currentUser!.uid;
   late final Box _settingsBox;
-  late final Future<List<_HomeFeedPost>> _homeFeedFuture;
+  late Future<List<_HomeFeedPost>> _homeFeedFuture;
   StreamSubscription<DocumentSnapshot>? _userSub;
   String _streamText = 'Select Stream';
   String _profileLetter = '?';
@@ -329,68 +329,81 @@ class _HomeSectionState extends State<HomeSection> {
         ],
       ),
 
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 90),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _heroCardsSlider(theme),
-            const SizedBox(height: 14),
-            StreamBuilder<DocumentSnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(uid)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                final data =
-                    snapshot.data?.data() as Map<String, dynamic>? ?? {};
-                final prefStream = (data['preferenceStream'] ?? '').toString();
-                final prefSubjects = <String>[];
-                final rawPrefs = data['preferences'];
-                if (rawPrefs is List) {
-                  prefSubjects.addAll(rawPrefs.map((e) => e.toString()));
-                }
-                final title = prefStream.isNotEmpty
-                    ? prefStream
-                    : (prefSubjects.isNotEmpty
-                          ? 'Your Preferences'
-                          : 'Continue Learning');
+      body: RefreshIndicator(
+        onRefresh: _refreshHomeSection,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 90),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _heroCardsSlider(theme),
+              const SizedBox(height: 14),
+              StreamBuilder<DocumentSnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(uid)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  final data =
+                      snapshot.data?.data() as Map<String, dynamic>? ?? {};
+                  final prefStream = (data['preferenceStream'] ?? '').toString();
+                  final prefSubjects = <String>[];
+                  final rawPrefs = data['preferences'];
+                  if (rawPrefs is List) {
+                    prefSubjects.addAll(rawPrefs.map((e) => e.toString()));
+                  }
+                  final title = prefStream.isNotEmpty
+                      ? prefStream
+                      : (prefSubjects.isNotEmpty
+                            ? 'Your Preferences'
+                            : 'Continue Learning');
 
-                if (prefSubjects.isEmpty) {
+                  if (prefSubjects.isEmpty) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _sectionTitle(title, theme),
+                        const SizedBox(height: 14),
+                        const Center(
+                          child: Text(
+                            'No preferences set',
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _sectionTitle(title, theme),
                       const SizedBox(height: 14),
-                      const Center(
-                        child: Text(
-                          'No preferences set',
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      ),
+                      _horizontalCards(theme, prefSubjects, prefStream),
                     ],
                   );
-                }
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _sectionTitle(title, theme),
-                    const SizedBox(height: 14),
-                    _horizontalCards(theme, prefSubjects, prefStream),
-                  ],
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-            _sectionTitle('For You', theme),
-            const SizedBox(height: 10),
-            _personalizedFeedSection(theme),
-          ],
+                },
+              ),
+              const SizedBox(height: 16),
+              _sectionTitle('For You', theme),
+              const SizedBox(height: 10),
+              _personalizedFeedSection(theme),
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  Future<void> _refreshHomeSection() async {
+    final future = _fetchPersonalizedHomeFeed();
+    if (mounted) {
+      setState(() => _homeFeedFuture = future);
+    }
+    await future;
   }
 
   void _startHeroCardsAutoLoop() {
