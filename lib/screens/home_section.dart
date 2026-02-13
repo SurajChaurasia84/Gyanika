@@ -3,8 +3,6 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:gyanika/screens/notification_screen.dart';
-import 'package:gyanika/screens/preference_screen.dart';
 import 'package:gyanika/helpers/notification_helper.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:iconsax/iconsax.dart';
@@ -12,12 +10,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hive/hive.dart';
 
+import 'notification_screen.dart';
 import 'my_profile_screen.dart';
 import 'course_detail_screen.dart';
 import 'explore_section.dart';
 import 'subject_screen.dart';
 import 'profile_screen.dart';
 import 'library_section.dart';
+import 'preference_screen.dart';
 
 Future<String> _dailyCurrentUserLabel() async {
   final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -64,12 +64,7 @@ class _HomeSectionState extends State<HomeSection> {
       subtitle: 'Build exam confidence with timed full-length tests.',
       icon: Iconsax.clipboard_tick,
       colors: [Color(0xFF0F8D7F), Color(0xFF2CB8A8)],
-    ),
-    _HeroCardData(
-      title: 'Revision Zone',
-      subtitle: 'Revise smartly with focused, high-yield concepts.',
-      icon: Iconsax.book_saved,
-      colors: [Color(0xFFC15C09), Color(0xFFF08F2E)],
+      action: _HeroCardAction.mockTests,
     ),
     _HeroCardData(
       title: 'Recommended For You',
@@ -421,7 +416,7 @@ class _HomeSectionState extends State<HomeSection> {
     return Column(
       children: [
         SizedBox(
-          height: 170,
+          height: 160,
           child: PageView.builder(
             controller: _heroCardsController,
             itemBuilder: (context, index) {
@@ -438,6 +433,14 @@ class _HomeSectionState extends State<HomeSection> {
                           context,
                           MaterialPageRoute(
                             builder: (_) => const DailyPracticeScreen(),
+                          ),
+                        );
+                        break;
+                      case _HeroCardAction.mockTests:
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const MockTestScreen(),
                           ),
                         );
                         break;
@@ -919,7 +922,7 @@ class _HeroCardData {
   });
 }
 
-enum _HeroCardAction { dailyPractice, recommended }
+enum _HeroCardAction { dailyPractice, mockTests, recommended }
 
 class _HeroCardView extends StatelessWidget {
   final _HeroCardData card;
@@ -2179,6 +2182,7 @@ class _DailyPracticeScreenState extends State<DailyPracticeScreen> {
                           const SizedBox(height: 10),
                           Container(
                             width: double.infinity,
+                            constraints: const BoxConstraints(maxHeight: 140),
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
                               color: Colors.black.withOpacity(0.25),
@@ -2187,12 +2191,526 @@ class _DailyPracticeScreenState extends State<DailyPracticeScreen> {
                                 color: Colors.white.withOpacity(0.2),
                               ),
                             ),
-                            child: Text(
-                              q.explanation,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
+                            child: SingleChildScrollView(
+                              child: Text(
+                                q.explanation,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class MockTestScreen extends StatefulWidget {
+  const MockTestScreen({super.key});
+
+  @override
+  State<MockTestScreen> createState() => _MockTestScreenState();
+}
+
+class _MockTestScreenState extends State<MockTestScreen> {
+  late Future<void> _initFuture;
+  final List<_DailyPracticeQuestion> _questions = [];
+  final Map<String, int> _answers = {};
+  List<String> _preferences = <String>[];
+  String _preferenceStream = 'Mock Tests';
+  int _currentIndex = 0;
+  bool _suppressNavigationTap = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initFuture = _initializeMockTests();
+  }
+
+  Future<void> _initializeMockTests() async {
+    _preferences = <String>[];
+    _preferenceStream = 'Mock Tests';
+    final userUid = FirebaseAuth.instance.currentUser?.uid;
+    if (userUid != null) {
+      final userSnap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userUid)
+          .get();
+      final userData = userSnap.data() ?? const <String, dynamic>{};
+      final rawPrefs = userData['preferences'];
+      _preferences = rawPrefs is List
+          ? rawPrefs
+                .map((e) => e.toString().trim())
+                .where((e) => e.isNotEmpty)
+                .toList()
+          : <String>[];
+      final stream = (userData['preferenceStream'] ?? '').toString().trim();
+      if (stream.isNotEmpty) {
+        _preferenceStream = stream;
+      }
+    }
+
+    final fetched = await _fetchMockQuestionsFromSetCards(
+      preferenceStream: _preferenceStream,
+      preferences: _preferences,
+    );
+    _questions
+      ..clear()
+      ..addAll(fetched);
+    _answers.clear();
+    _currentIndex = 0;
+  }
+
+  String _normalize(String value) {
+    return value
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'^_|_$'), '');
+  }
+
+  Future<List<_DailyPracticeQuestion>> _fetchMockQuestionsFromSetCards({
+    required String preferenceStream,
+    required List<String> preferences,
+  }) async {
+    final snap = await FirebaseFirestore.instance
+        .collectionGroup('questions')
+        .limit(150)
+        .get();
+
+    final streamNorm = _normalize(preferenceStream);
+    final prefNormMap = <String, String>{
+      for (final p in preferences) p: _normalize(p),
+    };
+    final allowedCardIds = <String, String>{};
+    if (streamNorm.isNotEmpty && prefNormMap.isNotEmpty) {
+      for (final entry in prefNormMap.entries) {
+        allowedCardIds['${streamNorm}_${entry.value}'] = entry.key;
+      }
+    }
+
+    final entries = <Map<String, dynamic>>[];
+    for (final doc in snap.docs) {
+      final data = doc.data();
+      final optionsRaw = data['options'];
+      final options = optionsRaw is List
+          ? optionsRaw
+                .map((e) => e.toString().trim())
+                .where((e) => e.isNotEmpty)
+                .toList()
+          : <String>[];
+      final content = (data['question'] ?? data['content'] ?? '')
+          .toString()
+          .trim();
+      final correctIndex = data['correctIndex'] is num
+          ? (data['correctIndex'] as num).toInt()
+          : null;
+      final explanationRaw = (data['explanation'] ?? '').toString().trim();
+      final explanation = explanationRaw.isNotEmpty
+          ? explanationRaw
+          : (correctIndex != null &&
+                    correctIndex >= 0 &&
+                    correctIndex < options.length
+                ? 'Correct answer: ${options[correctIndex]}'
+                : 'Answer submitted.');
+
+      final pathParts = doc.reference.path.split('/');
+      final cardId = pathParts.length > 1 ? pathParts[1] : '';
+      final normalizedCardId = cardId.toLowerCase().trim();
+      final streamMatched = streamNorm.isEmpty
+          ? true
+          : normalizedCardId.startsWith('${streamNorm}_');
+      final matchedPreference = allowedCardIds[normalizedCardId];
+      String derivedSource = (data['subject'] ?? data['category'] ?? '')
+          .toString()
+          .trim();
+      if (derivedSource.isEmpty &&
+          streamNorm.isNotEmpty &&
+          normalizedCardId.startsWith('${streamNorm}_')) {
+        final suffix = normalizedCardId.substring(streamNorm.length + 1);
+        final human = suffix
+            .replaceAll('_', ' ')
+            .trim()
+            .split(' ')
+            .where((e) => e.isNotEmpty)
+            .map((e) => e[0].toUpperCase() + e.substring(1))
+            .join(' ');
+        if (human.isNotEmpty) {
+          derivedSource = human;
+        }
+      }
+
+      entries.add({
+        'question': _DailyPracticeQuestion(
+        id: doc.id,
+        source: matchedPreference ?? (derivedSource.isEmpty ? 'General' : derivedSource),
+        content: content,
+        options: options,
+        correctIndex: correctIndex,
+        explanation: explanation,
+        stream: preferenceStream.isEmpty ? 'Mock Tests' : preferenceStream,
+        ownerUid: '',
+        ownerName: '',
+        ownerUsername: '',
+      ),
+        'streamMatched': streamMatched,
+        'prefMatched': matchedPreference != null,
+      });
+    }
+
+    final validEntries = entries.where((e) {
+      final q = e['question'] as _DailyPracticeQuestion;
+      return q.content.isNotEmpty && q.options.length >= 2;
+    }).toList();
+
+    final strict = validEntries.where((e) {
+      final streamMatched = e['streamMatched'] == true;
+      final prefMatched = e['prefMatched'] == true;
+      return streamMatched && prefMatched;
+    }).toList();
+
+    final streamOnly = validEntries
+        .where((e) => e['streamMatched'] == true)
+        .toList();
+
+    if (streamNorm.isEmpty) {
+      return const [];
+    }
+
+    final selectedEntries = preferences.isEmpty ? streamOnly : strict;
+    if (selectedEntries.isEmpty) {
+      return const [];
+    }
+
+    final all = selectedEntries
+        .map((e) => e['question'] as _DailyPracticeQuestion)
+        .toList();
+
+    final dedup = <String, _DailyPracticeQuestion>{};
+    for (final q in all) {
+      dedup[q.localKey] = q;
+    }
+    final list = dedup.values.toList()..shuffle();
+    return list.take(math.min(12, list.length)).toList();
+  }
+
+  void _submitAnswer(int optionIndex) {
+    if (_questions.isEmpty) return;
+    final q = _questions[_currentIndex];
+    if (_answers.containsKey(q.localKey)) return;
+    setState(() => _answers[q.localKey] = optionIndex);
+  }
+
+  void _nextQuestion() {
+    if (_currentIndex >= _questions.length - 1) {
+      Navigator.pop(context);
+      return;
+    }
+    setState(() => _currentIndex += 1);
+  }
+
+  void _previousQuestion() {
+    if (_currentIndex <= 0) return;
+    setState(() => _currentIndex -= 1);
+  }
+
+  void _handleScreenTap(TapUpDetails details) {
+    if (_suppressNavigationTap) {
+      _suppressNavigationTap = false;
+      return;
+    }
+    final width = MediaQuery.of(context).size.width;
+    if (details.localPosition.dx < width / 2) {
+      _previousQuestion();
+    } else {
+      _nextQuestion();
+    }
+  }
+
+  Future<void> _openPreferenceScreen() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const PreferenceScreen()),
+    );
+    if (!mounted) return;
+    setState(() {
+      _initFuture = _initializeMockTests();
+    });
+  }
+
+  void _openSubjectFromChip(_DailyPracticeQuestion q) {
+    final subject = q.source.trim();
+    if (subject.isEmpty || subject.toLowerCase() == 'general') return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            SubjectScreen(subjectName: subject, stream: _preferenceStream),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0C1020),
+      body: FutureBuilder<void>(
+        future: _initFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const _DailyPracticeSkeleton();
+          }
+          if (_questions.isEmpty) {
+            return const Center(
+              child: Text('No mock tests available right now.'),
+            );
+          }
+
+          final q = _questions[_currentIndex];
+          final selected = _answers[q.localKey];
+          final answered = selected != null;
+
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapUp: _handleScreenTap,
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Color(0xFF1A2364), Color(0xFF090D1A)],
+                      ),
+                    ),
+                  ),
+                ),
+                SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: List.generate(_questions.length, (i) {
+                            return Expanded(
+                              child: Container(
+                                height: 3,
+                                margin: const EdgeInsets.symmetric(horizontal: 2),
+                                decoration: BoxDecoration(
+                                  color: i <= _currentIndex
+                                      ? Colors.white
+                                      : Colors.white.withOpacity(0.25),
+                                  borderRadius: BorderRadius.circular(99),
+                                ),
+                              ),
+                            );
+                          }),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            IconButton(
+                              onPressed: () => Navigator.pop(context),
+                              icon: const Icon(Icons.close, color: Colors.white),
+                            ),
+                            const Spacer(),
+                            Text(
+                              "Mock Tests",
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.92),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(
+                              '${_currentIndex + 1}/${_questions.length}',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.86),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Flexible(
+                          fit: FlexFit.loose,
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.10),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.22),
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTapDown: (_) {
+                                        _suppressNavigationTap = true;
+                                      },
+                                      onTap: _openPreferenceScreen,
+                                      child: _BlurStatusChip(
+                                        text: q.stream,
+                                        icon: Iconsax.category,
+                                        dark: true,
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTapDown: (_) {
+                                        _suppressNavigationTap = true;
+                                      },
+                                      onTap: () => _openSubjectFromChip(q),
+                                      child: _BlurStatusChip(
+                                        text: q.source,
+                                        icon: Iconsax.document_text,
+                                        dark: true,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 14),
+                                Text(
+                                  'Q. ${q.content}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Flexible(
+                                  fit: FlexFit.loose,
+                                  child: ListView.separated(
+                                    shrinkWrap: true,
+                                    physics:
+                                        const NeverScrollableScrollPhysics(),
+                                    itemCount: q.options.length,
+                                    separatorBuilder: (_, _) =>
+                                        const SizedBox(height: 10),
+                                    itemBuilder: (context, i) {
+                                      final isSelected = selected == i;
+                                      final hasCorrect = q.correctIndex != null &&
+                                          q.correctIndex! >= 0 &&
+                                          q.correctIndex! < q.options.length;
+                                      final isCorrect =
+                                          hasCorrect && q.correctIndex == i;
+                                      final isWrongSelected = answered &&
+                                          isSelected &&
+                                          !isCorrect &&
+                                          hasCorrect;
+
+                                      Color tileColor =
+                                          Colors.white.withOpacity(0.12);
+                                      Color tileBorderColor =
+                                          Colors.white.withOpacity(0.25);
+
+                                      if (answered) {
+                                        if (isCorrect) {
+                                          tileColor =
+                                              Colors.green.withOpacity(0.24);
+                                          tileBorderColor = Colors.greenAccent
+                                              .withOpacity(0.9);
+                                        } else if (isWrongSelected) {
+                                          tileColor = Colors.red.withOpacity(
+                                            0.24,
+                                          );
+                                          tileBorderColor =
+                                              Colors.redAccent.withOpacity(0.9);
+                                        }
+                                      }
+
+                                      return GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        onTapDown: (_) {
+                                          _suppressNavigationTap = true;
+                                        },
+                                        onTap: answered
+                                            ? null
+                                            : () => _submitAnswer(i),
+                                        child: Container(
+                                          constraints: const BoxConstraints(
+                                            minHeight: 48,
+                                          ),
+                                          padding: const EdgeInsets.all(12),
+                                          decoration: BoxDecoration(
+                                            color: tileColor,
+                                            borderRadius:
+                                                BorderRadius.circular(14),
+                                            border: Border.all(
+                                              color: tileBorderColor,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            q.options[i],
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Center(
+                                  child: Text(
+                                    'Tap left for previous, right for next',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: Colors.grey.shade500,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        if (answered && q.explanation.trim().isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          Container(
+                            width: double.infinity,
+                            constraints: const BoxConstraints(maxHeight: 140),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.25),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.2),
+                              ),
+                            ),
+                            child: SingleChildScrollView(
+                              child: Text(
+                                'Explanation:\n\t${q.explanation}',
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ),
                           ),
