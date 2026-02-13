@@ -711,21 +711,79 @@ class _HomeSectionState extends State<HomeSection> {
   }
 
   Widget _homeFeedSkeleton(ThemeData theme) {
+    final isDark = theme.brightness == Brightness.dark;
+    final base = isDark ? const Color(0xFF1E2440) : const Color(0xFFE2E6EF);
+    final highlight = isDark
+        ? const Color(0xFF313A63)
+        : const Color(0xFFF6F8FC);
+
+    Widget bar({
+      required double height,
+      double radius = 8,
+      double? width,
+      EdgeInsetsGeometry margin = EdgeInsets.zero,
+    }) {
+      return Container(
+        width: width,
+        height: height,
+        margin: margin,
+        decoration: BoxDecoration(
+          color: base,
+          borderRadius: BorderRadius.circular(radius),
+        ),
+      );
+    }
+
+    Widget skeletonCard() {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isDark
+              ? theme.colorScheme.surface.withOpacity(0.2)
+              : theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withOpacity(0.08)
+                : theme.colorScheme.outline.withOpacity(0.2),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                bar(height: 12, width: 66),
+                const SizedBox(width: 10),
+                Expanded(child: bar(height: 11, width: 120)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            bar(height: 13, width: double.infinity),
+            const SizedBox(height: 6),
+            bar(height: 13, width: 230),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                bar(height: 10, width: 74),
+                const Spacer(),
+                bar(height: 10, width: 58),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
     return Shimmer.fromColors(
-      baseColor: theme.colorScheme.surfaceContainerHighest.withOpacity(0.7),
-      highlightColor: theme.colorScheme.surface.withOpacity(0.95),
+      baseColor: base,
+      highlightColor: highlight,
       child: ListView.separated(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         itemCount: 4,
         separatorBuilder: (_, _) => const SizedBox(height: 10),
-        itemBuilder: (_, _) => Container(
-          height: 88,
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
+        itemBuilder: (_, _) => skeletonCard(),
       ),
     );
   }
