@@ -407,8 +407,11 @@ class _LibraryFeedSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const base = Color(0xFF1E2440);
-    const highlight = Color(0xFF313A63);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final base = isDark ? const Color(0xFF1E2440) : const Color(0xFFE2E6EF);
+    final highlight = isDark
+        ? const Color(0xFF313A63)
+        : const Color(0xFFF4F6FB);
 
     Widget bar({
       required double height,
@@ -470,7 +473,9 @@ class _LibraryFeedSkeleton extends StatelessWidget {
     }
 
     return Container(
-      color: const Color(0xFF0C1020),
+      color: isDark
+          ? const Color(0xFF0C1020)
+          : Theme.of(context).scaffoldBackgroundColor,
       child: Shimmer.fromColors(
         baseColor: base,
         highlightColor: highlight,
