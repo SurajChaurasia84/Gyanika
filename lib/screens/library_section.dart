@@ -1239,6 +1239,7 @@ class _AnswerBoxState extends State<AnswerBox> {
 
 // ================= FOLLOW BUTTON WIDGET =================
 class FollowButton extends StatelessWidget {
+  static final Map<String, bool> _followStateCache = <String, bool>{};
   final String targetUid;
   const FollowButton({super.key, required this.targetUid});
 
@@ -1258,7 +1259,15 @@ class FollowButton extends StatelessWidget {
     return StreamBuilder<DocumentSnapshot>(
       stream: ref.snapshots(),
       builder: (_, snap) {
-        final isFollowing = snap.data?.exists ?? false;
+        final cached = _followStateCache[targetUid];
+        final hasLive = snap.hasData;
+        final isFollowing = hasLive ? (snap.data?.exists ?? false) : (cached ?? false);
+        if (hasLive) {
+          _followStateCache[targetUid] = isFollowing;
+        }
+        if (isFollowing) {
+          return const SizedBox.shrink();
+        }
         return InkWell(
           onTap: () async {
             final batch = FirebaseFirestore.instance.batch();
@@ -1267,65 +1276,42 @@ class FollowButton extends StatelessWidget {
                 .doc(myUid)
                 .collection('following')
                 .doc(targetUid);
-
-            if (isFollowing) {
-              batch.delete(ref);
-              batch.delete(myRef);
-              batch.set(
-                FirebaseFirestore.instance.collection('users').doc(targetUid),
-                {'followers': FieldValue.increment(-1)},
-                SetOptions(merge: true),
-              );
-              batch.set(
-                FirebaseFirestore.instance.collection('users').doc(myUid),
-                {'following': FieldValue.increment(-1)},
-                SetOptions(merge: true),
-              );
-            } else {
-              batch.set(ref, {'time': Timestamp.now()});
-              batch.set(myRef, {'time': Timestamp.now()});
-              batch.set(
-                FirebaseFirestore.instance.collection('users').doc(targetUid),
-                {'followers': FieldValue.increment(1)},
-                SetOptions(merge: true),
-              );
-              batch.set(
-                FirebaseFirestore.instance.collection('users').doc(myUid),
-                {'following': FieldValue.increment(1)},
-                SetOptions(merge: true),
-              );
-            }
+            batch.set(ref, {'time': Timestamp.now()});
+            batch.set(myRef, {'time': Timestamp.now()});
+            batch.set(
+              FirebaseFirestore.instance.collection('users').doc(targetUid),
+              {'followers': FieldValue.increment(1)},
+              SetOptions(merge: true),
+            );
+            batch.set(
+              FirebaseFirestore.instance.collection('users').doc(myUid),
+              {'following': FieldValue.increment(1)},
+              SetOptions(merge: true),
+            );
             await batch.commit();
 
             if (myUid == targetUid) {
               return;
             }
 
-            if (isFollowing) {
-              await NotificationHelper.removeFollowActivity(
-                targetUid: targetUid,
-                actorUid: myUid,
-              );
-            } else {
-              final myName = await _currentUserLabel();
-              await NotificationHelper.upsertFollowActivity(
-                targetUid: targetUid,
-                title: '$myName started followed you',
-                actorUid: myUid,
-              );
-            }
+            final myName = await _currentUserLabel();
+            await NotificationHelper.upsertFollowActivity(
+              targetUid: targetUid,
+              title: '$myName started followed you',
+              actorUid: myUid,
+            );
           },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: isFollowing ? Colors.grey.shade200 : Colors.indigo,
+              color: Colors.indigo,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              isFollowing ? 'Following' : 'Follow',
+              'Follow',
               style: TextStyle(
                 fontSize: 12,
-                color: isFollowing ? Colors.black : Colors.white,
+                color: Colors.white,
                 fontWeight: FontWeight.w600,
               ),
             ),
