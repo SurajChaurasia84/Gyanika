@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shimmer/shimmer.dart';
 import 'profile_screen.dart';
 import 'package:gyanika/helpers/notification_helper.dart';
 
@@ -339,7 +340,7 @@ class _LibrarySectionState extends State<LibrarySection> {
   Widget _buildFeedList() {
     final docs = _currentDocs();
     if (_loading && docs.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const _LibraryFeedSkeleton();
     }
     if (docs.isEmpty) {
       return RefreshIndicator(
@@ -395,6 +396,94 @@ class _LibrarySectionState extends State<LibrarySection> {
               },
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+class _LibraryFeedSkeleton extends StatelessWidget {
+  const _LibraryFeedSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    const base = Color(0xFF1E2440);
+    const highlight = Color(0xFF313A63);
+
+    Widget bar({
+      required double height,
+      double radius = 10,
+      double? width,
+      EdgeInsetsGeometry margin = EdgeInsets.zero,
+    }) {
+      return Container(
+        width: width,
+        height: height,
+        margin: margin,
+        decoration: BoxDecoration(
+          color: base,
+          borderRadius: BorderRadius.circular(radius),
+        ),
+      );
+    }
+
+    Widget skeletonCard() {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: base.withOpacity(0.45),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: highlight.withOpacity(0.35)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                bar(height: 26, width: 26, radius: 999),
+                const SizedBox(width: 8),
+                Expanded(child: bar(height: 12, width: 110)),
+                const SizedBox(width: 8),
+                bar(height: 22, width: 64, radius: 999),
+              ],
+            ),
+            const SizedBox(height: 14),
+            bar(height: 16, width: double.infinity),
+            const SizedBox(height: 10),
+            bar(height: 16, width: 220),
+            const SizedBox(height: 16),
+            bar(
+              height: 44,
+              radius: 14,
+              margin: const EdgeInsets.only(bottom: 10),
+            ),
+            Row(
+              children: [
+                bar(height: 18, width: 56),
+                const Spacer(),
+                bar(height: 18, width: 86),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      color: const Color(0xFF0C1020),
+      child: Shimmer.fromColors(
+        baseColor: base,
+        highlightColor: highlight,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 140),
+          children: [
+            skeletonCard(),
+            const SizedBox(height: 12),
+            skeletonCard(),
+            const SizedBox(height: 12),
+            skeletonCard(),
+          ],
         ),
       ),
     );
