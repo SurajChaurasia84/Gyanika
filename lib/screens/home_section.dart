@@ -895,6 +895,33 @@ class _DailyPracticeQuestion {
       'ownerUsername': ownerUsername,
     };
   }
+
+  factory _DailyPracticeQuestion.fromMap(Map<String, dynamic> map) {
+    final optionsRaw = map['options'];
+    final options = optionsRaw is List
+        ? optionsRaw
+              .map((e) => e.toString().trim())
+              .where((e) => e.isNotEmpty)
+              .toList()
+        : <String>[];
+    final correctIndex = map['correctIndex'] is num
+        ? (map['correctIndex'] as num).toInt()
+        : null;
+    return _DailyPracticeQuestion(
+      id: (map['id'] ?? '').toString(),
+      source: (map['source'] ?? '').toString(),
+      content: (map['content'] ?? '').toString().trim(),
+      options: options,
+      correctIndex: correctIndex,
+      explanation: (map['explanation'] ?? '').toString().trim(),
+      stream: (map['stream'] ?? 'General').toString().trim().isEmpty
+          ? 'General'
+          : (map['stream'] ?? 'General').toString().trim(),
+      ownerUid: (map['ownerUid'] ?? '').toString(),
+      ownerName: (map['ownerName'] ?? '').toString().trim(),
+      ownerUsername: (map['ownerUsername'] ?? '').toString().trim(),
+    );
+  }
 }
 
 class DailyPracticeScreen extends StatefulWidget {
@@ -905,6 +932,9 @@ class DailyPracticeScreen extends StatefulWidget {
 }
 
 class _DailyPracticeScreenState extends State<DailyPracticeScreen> {
+  static const String _dailyBoxName = 'daily_practice_local';
+  static const String _dailyPostsDayKey = 'daily_posts_day';
+  static const String _dailyPostsItemsKey = 'daily_posts_items';
   late Future<void> _initFuture;
   final String _uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
   final List<_DailyPracticeQuestion> _questions = [];
@@ -912,6 +942,7 @@ class _DailyPracticeScreenState extends State<DailyPracticeScreen> {
   Map<String, int> _answers = {};
   int _currentIndex = 0;
   bool _suppressNavigationTap = false;
+  Box? _dailyBox;
   Timer? _midnightTimer;
 
   @override
@@ -937,21 +968,75 @@ class _DailyPracticeScreenState extends State<DailyPracticeScreen> {
         _questions.clear();
         _answers = {};
         _currentIndex = 0;
-        _initFuture = _initializeDailyPractice();
+        _initFuture = _initializeDailyPractice(forceRefresh: true);
       });
       _scheduleMidnightReset();
     });
   }
 
-  Future<void> _initializeDailyPractice() async {
-    final fetched = await _fetchDailyQuestions();
+  String _dayKey(DateTime d) {
+    final m = d.month.toString().padLeft(2, '0');
+    final day = d.day.toString().padLeft(2, '0');
+    return '${d.year}-$m-$day';
+  }
+
+  Future<void> _initializeDailyPractice({bool forceRefresh = false}) async {
+    final fetched = await _loadOrCreateDailyQuestions(forceRefresh: forceRefresh);
     _questions
       ..clear()
       ..addAll(fetched);
-    _answeredInFirebase.removeWhere(
-      (key) => !_questions.any((q) => q.localKey == key),
-    );
+    _answeredInFirebase.clear();
     _answers = {};
+    _currentIndex = 0;
+  }
+
+  Future<Box> _openDailyBox() async {
+    final box = _dailyBox ?? await Hive.openBox(_dailyBoxName);
+    _dailyBox = box;
+    return box;
+  }
+
+  List<_DailyPracticeQuestion> _decodeCachedDailyQuestions(dynamic raw) {
+    if (raw is! List) return const [];
+    final parsed = <_DailyPracticeQuestion>[];
+    for (final item in raw) {
+      if (item is! Map) continue;
+      final map = <String, dynamic>{};
+      for (final entry in item.entries) {
+        map[entry.key.toString()] = entry.value;
+      }
+      final q = _DailyPracticeQuestion.fromMap(map);
+      if (q.id.isEmpty || q.source.isEmpty) continue;
+      if (q.content.isEmpty || q.options.length < 2) continue;
+      parsed.add(q);
+    }
+    return parsed;
+  }
+
+  Future<List<_DailyPracticeQuestion>> _loadOrCreateDailyQuestions({
+    bool forceRefresh = false,
+  }) async {
+    final box = await _openDailyBox();
+    final today = _dayKey(DateTime.now());
+    final rng = math.Random();
+
+    if (!forceRefresh) {
+      final cachedDay = (box.get(_dailyPostsDayKey) ?? '').toString();
+      final cached = _decodeCachedDailyQuestions(box.get(_dailyPostsItemsKey));
+      if (cachedDay == today && cached.isNotEmpty) {
+        final shuffled = cached.take(10).toList()..shuffle(rng);
+        return shuffled;
+      }
+    }
+
+    final fresh = await _fetchDailyQuestions();
+    await box.put(_dailyPostsDayKey, today);
+    await box.put(
+      _dailyPostsItemsKey,
+      fresh.map((q) => q.toMap()).toList(growable: false),
+    );
+    final shuffled = fresh.toList()..shuffle(rng);
+    return shuffled;
   }
 
   Future<List<_DailyPracticeQuestion>> _fetchCollectionQuestions(
@@ -961,6 +1046,7 @@ class _DailyPracticeScreenState extends State<DailyPracticeScreen> {
   ) async {
     final snap = await FirebaseFirestore.instance
         .collection(collection)
+        .orderBy('createdAt', descending: true)
         .limit(limit)
         .get();
     return snap.docs.map((doc) {
@@ -1007,101 +1093,33 @@ class _DailyPracticeScreenState extends State<DailyPracticeScreen> {
     }).where((q) => q.content.isNotEmpty && q.options.length >= 2).toList();
   }
 
-  Future<bool> _isUnansweredForCurrentUser(_DailyPracticeQuestion q) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return false;
-
-    if (q.source == 'quizzes') {
-      final snap = await FirebaseFirestore.instance
-          .collection('quizzes')
-          .doc(q.id)
-          .collection('attempts')
-          .doc(uid)
-          .get();
-      return !snap.exists;
-    }
-    if (q.source == 'polls') {
-      final snap = await FirebaseFirestore.instance
-          .collection('polls')
-          .doc(q.id)
-          .collection('votes')
-          .doc(uid)
-          .get();
-      return !snap.exists;
-    }
-    if (q.source == 'questions') {
-      final snap = await FirebaseFirestore.instance
-          .collection('questions')
-          .doc(q.id)
-          .collection('users')
-          .doc(uid)
-          .get();
-      return !snap.exists;
-    }
-    return false;
-  }
-
   Future<List<_DailyPracticeQuestion>> _fetchDailyQuestions() async {
     final rng = math.Random();
-    final targetCount = 4 + rng.nextInt(9); // 4..12
+    const dailyLimit = 10;
 
     final merged = <_DailyPracticeQuestion>[
-      ...await _fetchCollectionQuestions('quizzes', 'quizzes', 90),
-      ...await _fetchCollectionQuestions('polls', 'polls', 90),
+      ...await _fetchCollectionQuestions('quizzes', 'quizzes', 5),
+      ...await _fetchCollectionQuestions('polls', 'polls', 5),
     ];
+
+    if (merged.length < dailyLimit) {
+      final shortfall = dailyLimit - merged.length;
+      merged.addAll(
+        await _fetchCollectionQuestions('questions', 'questions', shortfall),
+      );
+    }
+
+    if (merged.isEmpty) return const [];
 
     final dedup = <String, _DailyPracticeQuestion>{};
     for (final q in merged) {
-      dedup['${q.source}_${q.id}'] = q;
+      dedup[q.localKey] = q;
     }
-    final pool = dedup.values.toList();
-    if (pool.isEmpty) return const [];
+    final pool = dedup.values.toList()
+      ..sort((a, b) => a.id.compareTo(b.id))
+      ..shuffle(rng);
 
-    final unansweredPool = <_DailyPracticeQuestion>[];
-    for (final q in pool) {
-      final isUnanswered = await _isUnansweredForCurrentUser(q);
-      if (isUnanswered) {
-        unansweredPool.add(q);
-      } else {
-        _answeredInFirebase.add(q.localKey);
-      }
-    }
-    final effectivePool = unansweredPool.isNotEmpty ? unansweredPool : pool;
-
-    effectivePool.sort((a, b) => a.id.compareTo(b.id));
-    effectivePool.shuffle(rng);
-
-    final byStream = <String, List<_DailyPracticeQuestion>>{};
-    for (final q in effectivePool) {
-      byStream.putIfAbsent(q.stream, () => []).add(q);
-    }
-
-    final chosen = <_DailyPracticeQuestion>[];
-    final streamKeys = byStream.keys.toList()..shuffle(rng);
-    for (final key in streamKeys) {
-      final list = byStream[key]!;
-      if (list.isEmpty) continue;
-      chosen.add(list.removeAt(0));
-      if (chosen.length >= targetCount) break;
-    }
-
-    if (chosen.length < targetCount) {
-      final used = chosen.map((e) => e.localKey).toSet();
-      for (final q in effectivePool) {
-        if (used.contains(q.localKey)) continue;
-        chosen.add(q);
-        if (chosen.length >= targetCount) break;
-      }
-    }
-    if (chosen.length < 4 && effectivePool.length >= 4) {
-      final used = chosen.map((e) => e.localKey).toSet();
-      for (final q in effectivePool) {
-        if (used.contains(q.localKey)) continue;
-        chosen.add(q);
-        if (chosen.length >= 4) break;
-      }
-    }
-    return chosen.take(math.min(12, chosen.length)).toList();
+    return pool.take(math.min(dailyLimit, pool.length)).toList();
   }
 
   String? _postCollection(_DailyPracticeQuestion q) {
