@@ -908,10 +908,10 @@ class _DailyPracticeScreenState extends State<DailyPracticeScreen> {
   late Future<void> _initFuture;
   final String _uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
   final List<_DailyPracticeQuestion> _questions = [];
+  final Set<String> _answeredInFirebase = <String>{};
   Map<String, int> _answers = {};
   int _currentIndex = 0;
   bool _suppressNavigationTap = false;
-  Box? _box;
   Timer? _midnightTimer;
 
   @override
@@ -927,19 +927,11 @@ class _DailyPracticeScreenState extends State<DailyPracticeScreen> {
     super.dispose();
   }
 
-  String _dayKey(DateTime d) {
-    final m = d.month.toString().padLeft(2, '0');
-    final day = d.day.toString().padLeft(2, '0');
-    return '${d.year}-$m-$day';
-  }
-
   void _scheduleMidnightReset() {
     _midnightTimer?.cancel();
     final now = DateTime.now();
     final next = DateTime(now.year, now.month, now.day + 1);
-    _midnightTimer = Timer(next.difference(now), () async {
-      final box = _box ?? await Hive.openBox('daily_practice_local');
-      await box.clear();
+    _midnightTimer = Timer(next.difference(now), () {
       if (!mounted) return;
       setState(() {
         _questions.clear();
@@ -952,19 +944,14 @@ class _DailyPracticeScreenState extends State<DailyPracticeScreen> {
   }
 
   Future<void> _initializeDailyPractice() async {
-    final box = await Hive.openBox('daily_practice_local');
-    _box = box;
     final fetched = await _fetchDailyQuestions();
     _questions
       ..clear()
       ..addAll(fetched);
+    _answeredInFirebase.removeWhere(
+      (key) => !_questions.any((q) => q.localKey == key),
+    );
     _answers = {};
-  }
-
-  Future<void> _persistAnswers() async {
-    final box = _box ?? await Hive.openBox('daily_practice_local');
-    final today = _dayKey(DateTime.now());
-    await box.put('answers_${_uid}_$today', _answers);
   }
 
   Future<List<_DailyPracticeQuestion>> _fetchCollectionQuestions(
@@ -1059,7 +1046,6 @@ class _DailyPracticeScreenState extends State<DailyPracticeScreen> {
     final targetCount = 4 + rng.nextInt(9); // 4..12
 
     final merged = <_DailyPracticeQuestion>[
-      ...await _fetchCollectionQuestions('questions', 'questions', 90),
       ...await _fetchCollectionQuestions('quizzes', 'quizzes', 90),
       ...await _fetchCollectionQuestions('polls', 'polls', 90),
     ];
@@ -1073,8 +1059,11 @@ class _DailyPracticeScreenState extends State<DailyPracticeScreen> {
 
     final unansweredPool = <_DailyPracticeQuestion>[];
     for (final q in pool) {
-      if (await _isUnansweredForCurrentUser(q)) {
+      final isUnanswered = await _isUnansweredForCurrentUser(q);
+      if (isUnanswered) {
         unansweredPool.add(q);
+      } else {
+        _answeredInFirebase.add(q.localKey);
       }
     }
     final effectivePool = unansweredPool.isNotEmpty ? unansweredPool : pool;
@@ -1186,8 +1175,7 @@ class _DailyPracticeScreenState extends State<DailyPracticeScreen> {
     if (_questions.isEmpty) return;
     final q = _questions[_currentIndex];
     if (_answers.containsKey(q.localKey)) return;
-    setState(() => _answers[q.localKey] = optionIndex);
-    await _persistAnswers();
+    if (_answeredInFirebase.contains(q.localKey)) return;
 
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
@@ -1216,6 +1204,11 @@ class _DailyPracticeScreenState extends State<DailyPracticeScreen> {
             content: q.content,
           );
         }
+        if (!mounted) return;
+        setState(() => _answers[q.localKey] = optionIndex);
+      } else {
+        if (!mounted) return;
+        setState(() => _answeredInFirebase.add(q.localKey));
       }
       return;
     }
@@ -1244,6 +1237,11 @@ class _DailyPracticeScreenState extends State<DailyPracticeScreen> {
             content: q.content,
           );
         }
+        if (!mounted) return;
+        setState(() => _answers[q.localKey] = optionIndex);
+      } else {
+        if (!mounted) return;
+        setState(() => _answeredInFirebase.add(q.localKey));
       }
       return;
     }
@@ -1272,6 +1270,11 @@ class _DailyPracticeScreenState extends State<DailyPracticeScreen> {
             content: q.content,
           );
         }
+        if (!mounted) return;
+        setState(() => _answers[q.localKey] = optionIndex);
+      } else {
+        if (!mounted) return;
+        setState(() => _answeredInFirebase.add(q.localKey));
       }
     }
   }
@@ -1302,6 +1305,203 @@ class _DailyPracticeScreenState extends State<DailyPracticeScreen> {
     }
   }
 
+  Widget _buildRegularOptions(
+    _DailyPracticeQuestion q,
+    int? selected,
+    bool answered,
+  ) {
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: q.options.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
+      itemBuilder: (context, i) {
+        final isSelected = selected == i;
+        final hasCorrect =
+            q.correctIndex != null &&
+            q.correctIndex! >= 0 &&
+            q.correctIndex! < q.options.length &&
+            q.source != 'polls';
+        final isCorrect = hasCorrect && q.correctIndex == i;
+        final isWrongSelected =
+            answered && isSelected && !isCorrect && hasCorrect;
+
+        Color tileColor = Colors.white.withOpacity(0.12);
+        Color tileBorderColor = Colors.white.withOpacity(0.25);
+
+        if (answered) {
+          if (isCorrect) {
+            tileColor = Colors.green.withOpacity(0.24);
+            tileBorderColor = Colors.greenAccent.withOpacity(0.9);
+          } else if (isWrongSelected) {
+            tileColor = Colors.red.withOpacity(0.24);
+            tileBorderColor = Colors.redAccent.withOpacity(0.9);
+          } else if (!hasCorrect && isSelected) {
+            tileColor = Colors.indigo.withOpacity(0.35);
+            tileBorderColor = Colors.indigoAccent.withOpacity(0.9);
+          }
+        } else if (isSelected) {
+          tileColor = Colors.red.withOpacity(0.82);
+          tileBorderColor = Colors.red.shade100;
+        }
+
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (_) {
+            _suppressNavigationTap = true;
+          },
+          onTap: answered
+              ? null
+              : () async {
+                  await _submitAnswer(i);
+                },
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 48),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: tileColor,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: tileBorderColor),
+            ),
+            child: Text(
+              q.options[i],
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPollOptions(_DailyPracticeQuestion q, int? localSelected) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      return _buildRegularOptions(q, localSelected, localSelected != null);
+    }
+
+    final votesRef = FirebaseFirestore.instance
+        .collection('polls')
+        .doc(q.id)
+        .collection('votes')
+        .withConverter<Map<String, dynamic>>(
+          fromFirestore: (snap, _) => snap.data() ?? const {},
+          toFirestore: (value, _) => value,
+        );
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: votesRef.snapshots(),
+      builder: (context, snap) {
+        final docs = snap.data?.docs ?? const [];
+        final counts = List<int>.filled(q.options.length, 0);
+        int? selectedFromFirebase;
+
+        for (final doc in docs) {
+          final option = (doc.data()['option'] ?? '').toString();
+          final idx = q.options.indexOf(option);
+          if (idx != -1) {
+            counts[idx] += 1;
+            if (doc.id == uid) selectedFromFirebase = idx;
+          }
+        }
+
+        final selected = localSelected ?? selectedFromFirebase;
+        final answered =
+            selected != null || _answeredInFirebase.contains(q.localKey);
+        final total = counts.fold<int>(0, (sum, c) => sum + c);
+
+        return ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: q.options.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 10),
+          itemBuilder: (context, i) {
+            final isSelected = selected == i;
+            final percent = answered && total > 0
+                ? ((counts[i] / total) * 100).round()
+                : 0;
+
+            final tileColor = isSelected
+                ? Colors.indigo.withOpacity(0.35)
+                : Colors.white.withOpacity(0.12);
+            final tileBorderColor = isSelected
+                ? Colors.indigoAccent.withOpacity(0.9)
+                : Colors.white.withOpacity(0.25);
+            final fillColor = isSelected
+                ? Colors.indigoAccent.withOpacity(0.28)
+                : Colors.white.withOpacity(0.14);
+
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapDown: (_) {
+                _suppressNavigationTap = true;
+              },
+              onTap: answered
+                  ? null
+                  : () async {
+                      await _submitAnswer(i);
+                    },
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 48),
+                decoration: BoxDecoration(
+                  color: tileColor,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: tileBorderColor),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Stack(
+                    children: [
+                      if (answered)
+                        FractionallySizedBox(
+                          widthFactor: percent / 100,
+                          alignment: Alignment.centerLeft,
+                          child: Container(height: 48, color: fillColor),
+                        ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                q.options[i],
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w700
+                                      : FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            if (answered)
+                              Text(
+                                '$percent%',
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.9),
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1320,7 +1520,8 @@ class _DailyPracticeScreenState extends State<DailyPracticeScreen> {
 
           final q = _questions[_currentIndex];
           final selected = _answers[q.localKey];
-          final answered = selected != null;
+          final answered =
+              selected != null || _answeredInFirebase.contains(q.localKey);
 
           return GestureDetector(
             behavior: HitTestBehavior.opaque,
@@ -1524,79 +1725,13 @@ class _DailyPracticeScreenState extends State<DailyPracticeScreen> {
                                 const SizedBox(height: 16),
                                 Flexible(
                                   fit: FlexFit.loose,
-                                  child: ListView.separated(
-                                    shrinkWrap: true,
-                                    physics:
-                                        const NeverScrollableScrollPhysics(),
-                                    itemCount: q.options.length,
-                                    separatorBuilder: (_, _) =>
-                                        const SizedBox(height: 10),
-                                    itemBuilder: (context, i) {
-                                      final isSelected = selected == i;
-                                      final hasCorrect = q.correctIndex != null &&
-                                          q.correctIndex! >= 0 &&
-                                          q.correctIndex! < q.options.length &&
-                                          q.source != 'polls';
-                                      final isCorrect = hasCorrect && q.correctIndex == i;
-                                      final isWrongSelected =
-                                          answered && isSelected && !isCorrect && hasCorrect;
-
-                                      Color tileColor = Colors.white.withOpacity(0.12);
-                                      Color tileBorderColor = Colors.white.withOpacity(0.25);
-
-                                      if (answered) {
-                                        if (isCorrect) {
-                                          tileColor = Colors.green.withOpacity(0.24);
-                                          tileBorderColor = Colors.greenAccent.withOpacity(0.9);
-                                        } else if (isWrongSelected) {
-                                          tileColor = Colors.red.withOpacity(0.24);
-                                          tileBorderColor = Colors.redAccent.withOpacity(0.9);
-                                        } else if (!hasCorrect && isSelected) {
-                                          tileColor = Colors.indigo.withOpacity(0.35);
-                                          tileBorderColor = Colors.indigoAccent.withOpacity(0.9);
-                                        }
-                                      } else if (isSelected) {
-                                        tileColor = q.source == 'polls'
-                                            ? Colors.indigo.withOpacity(0.35)
-                                            : Colors.red.withOpacity(0.82);
-                                        tileBorderColor = q.source == 'polls'
-                                            ? Colors.indigoAccent.withOpacity(0.9)
-                                            : Colors.red.shade100;
-                                      }
-
-                                      return GestureDetector(
-                                        behavior: HitTestBehavior.opaque,
-                                        onTapDown: (_) {
-                                          _suppressNavigationTap = true;
-                                        },
-                                        onTap: answered
-                                            ? null
-                                            : () async {
-                                                await _submitAnswer(i);
-                                              },
-                                        child: Container(
-                                          padding: const EdgeInsets.all(12),
-                                          decoration: BoxDecoration(
-                                            color: tileColor,
-                                            borderRadius: BorderRadius.circular(
-                                              14,
-                                            ),
-                                            border: Border.all(
-                                              color: tileBorderColor,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            q.options[i],
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
+                                  child: q.source == 'polls'
+                                      ? _buildPollOptions(q, selected)
+                                      : _buildRegularOptions(
+                                          q,
+                                          selected,
+                                          answered,
                                         ),
-                                      );
-                                    },
-                                  ),
                                 ),
                                 const SizedBox(height: 10),
                                 Builder(
