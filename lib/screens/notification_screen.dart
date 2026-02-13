@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:shimmer/shimmer.dart';
 
 import 'profile_screen.dart';
 import 'my_profile_screen.dart';
@@ -217,7 +218,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
           ),
           Expanded(
             child: _items.isEmpty && _loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const _NotificationsSkeleton()
                 : _items.isEmpty
                     ? const Center(child: Text('No notifications yet'))
                     : NotificationListener<ScrollNotification>(
@@ -235,8 +236,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                             if (_loading)
                               const Padding(
                                 padding: EdgeInsets.only(top: 12),
-                                child:
-                                    Center(child: CircularProgressIndicator()),
+                                child: _NotificationsLoadMoreSkeleton(),
                               ),
                           ],
                         ),
@@ -244,6 +244,134 @@ class _NotificationScreenState extends State<NotificationScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _NotificationsSkeleton extends StatelessWidget {
+  const _NotificationsSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final base = isDark
+        ? const Color(0xFF2A3252)
+        : const Color(0xFFE2E6EF);
+    final highlight = isDark
+        ? const Color(0xFF3A4470)
+        : const Color(0xFFF4F6FB);
+
+    Widget line(double width, {double height = 12}) {
+      return Container(
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          color: base,
+          borderRadius: BorderRadius.circular(8),
+        ),
+      );
+    }
+
+    Widget item() {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 18,
+              height: 18,
+              decoration: BoxDecoration(
+                color: base,
+                borderRadius: BorderRadius.circular(99),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  line(double.infinity, height: 13),
+                  const SizedBox(height: 6),
+                  line(170),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            line(56, height: 10),
+          ],
+        ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Shimmer.fromColors(
+          baseColor: base,
+          highlightColor: highlight,
+          child: SingleChildScrollView(
+            physics: const NeverScrollableScrollPhysics(),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        line(54, height: 11),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    item(),
+                    item(),
+                    item(),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        line(74, height: 11),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    item(),
+                    item(),
+                    item(),
+                    item(),
+                    item(),
+                    item(),
+                    item(),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _NotificationsLoadMoreSkeleton extends StatelessWidget {
+  const _NotificationsLoadMoreSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final base = isDark
+        ? const Color(0xFF56608B)
+        : const Color(0xFFB8C0D1);
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(3, (i) {
+        return Container(
+          width: 6,
+          height: 6,
+          margin: EdgeInsets.only(right: i == 2 ? 0 : 6),
+          decoration: BoxDecoration(
+            color: base,
+            borderRadius: BorderRadius.circular(99),
+          ),
+        );
+      }),
     );
   }
 }
