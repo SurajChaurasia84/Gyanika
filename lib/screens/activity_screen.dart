@@ -43,12 +43,28 @@ class ActivityScreen extends StatelessWidget {
             );
           }
 
+          final uniqueDocs = <QueryDocumentSnapshot>[];
+          final seenKeys = <String>{};
+          for (final doc in snapshot.data!.docs) {
+            final data = doc.data() as Map<String, dynamic>? ?? const {};
+            final key = _activityDedupKey(data, doc.reference);
+            if (seenKeys.contains(key)) continue;
+            seenKeys.add(key);
+            uniqueDocs.add(doc);
+          }
+
+          if (uniqueDocs.isEmpty) {
+            return const Center(
+              child: Text("No activity yet"),
+            );
+          }
+
           return ListView.separated(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-            itemCount: snapshot.data!.docs.length,
+            itemCount: uniqueDocs.length,
             separatorBuilder: (_, _) => const SizedBox(height: 10),
             itemBuilder: (context, index) {
-              final doc = snapshot.data!.docs[index];
+              final doc = uniqueDocs[index];
               final data = doc.data() as Map<String, dynamic>;
               data['reference'] = doc.reference;
 
@@ -331,6 +347,26 @@ String _targetUidFromActivity(Map<String, dynamic> data) {
     return ref.parent.parent?.id ?? '';
   }
   return '';
+}
+
+String _activityDedupKey(
+  Map<String, dynamic> data,
+  DocumentReference reference,
+) {
+  final type = (data['type'] ?? '').toString().toLowerCase().trim();
+  final postId = (data['postId'] ?? '').toString().trim();
+  final postType = (data['postType'] ?? '').toString().toLowerCase().trim();
+  if (type == 'follow') {
+    final targetUid = (data['targetUid'] ?? '').toString().trim();
+    final fallbackTarget = reference.parent.parent?.id ?? '';
+    final uid = targetUid.isNotEmpty ? targetUid : fallbackTarget;
+    return 'follow:$uid';
+  }
+  if (postId.isNotEmpty) {
+    return '$type:$postType:$postId';
+  }
+  final title = (data['title'] ?? '').toString().toLowerCase().trim();
+  return '$type:$title';
 }
 
 void _pushSmooth(BuildContext context, Widget page) {
