@@ -17,6 +17,7 @@ import 'course_detail_screen.dart';
 import 'explore_section.dart';
 import 'subject_screen.dart';
 import 'profile_screen.dart';
+import 'library_section.dart';
 
 Future<String> _dailyCurrentUserLabel() async {
   final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -40,6 +41,7 @@ class HomeSection extends StatefulWidget {
 class _HomeSectionState extends State<HomeSection> {
   final String uid = FirebaseAuth.instance.currentUser!.uid;
   late final Box _settingsBox;
+  late final Future<List<_HomeFeedPost>> _homeFeedFuture;
   StreamSubscription<DocumentSnapshot>? _userSub;
   String _streamText = 'Select Stream';
   String _profileLetter = '?';
@@ -86,6 +88,7 @@ class _HomeSectionState extends State<HomeSection> {
           _heroCardsController.initialPage % _heroCards.length;
     }
     _settingsBox = Hive.box('settings');
+    _homeFeedFuture = _fetchPersonalizedHomeFeed();
     final cached = _settingsBox.get('preference_stream');
     if (cached is String && cached.trim().isNotEmpty) {
       _streamText = cached;
@@ -385,6 +388,10 @@ class _HomeSectionState extends State<HomeSection> {
                 );
               },
             ),
+            const SizedBox(height: 16),
+            _sectionTitle('For You', theme),
+            const SizedBox(height: 10),
+            _personalizedFeedSection(theme),
           ],
         ),
       ),
@@ -530,6 +537,241 @@ class _HomeSectionState extends State<HomeSection> {
     );
   }
 
+  List<List<T>> _chunkList<T>(List<T> items, int size) {
+    if (items.isEmpty) return <List<T>>[];
+    final chunks = <List<T>>[];
+    for (var i = 0; i < items.length; i += size) {
+      final end = math.min(i + size, items.length);
+      chunks.add(items.sublist(i, end));
+    }
+    return chunks;
+  }
+
+  Future<List<_HomeFeedPost>> _fetchPersonalizedHomeFeed() async {
+    final userSnap = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .get();
+    final userData = userSnap.data() ?? const <String, dynamic>{};
+
+    final rawCategories = userData['categories'];
+    final categories = rawCategories is List
+        ? rawCategories
+              .map((e) => e.toString().trim())
+              .where((e) => e.isNotEmpty)
+              .toSet()
+              .toList()
+        : <String>[];
+
+    final followingSnap = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('following')
+        .get();
+    final followingUids = followingSnap.docs
+        .map((d) => d.id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+
+    final batches = <_HomeQueryBatch>[];
+    const collections = ['questions', 'polls', 'quizzes'];
+
+    for (final collection in collections) {
+      if (categories.isNotEmpty) {
+        final categoryBatch = categories.take(10).toList();
+        batches.add(
+          _HomeQueryBatch(
+            collection: collection,
+            future: FirebaseFirestore.instance
+                .collection(collection)
+                .where('categories', whereIn: categoryBatch)
+                .orderBy('createdAt', descending: true)
+                .limit(20)
+                .get(),
+          ),
+        );
+      }
+
+      if (followingUids.isNotEmpty) {
+        final uidChunks = _chunkList(followingUids, 10);
+        for (final chunk in uidChunks) {
+          batches.add(
+            _HomeQueryBatch(
+              collection: collection,
+              future: FirebaseFirestore.instance
+                  .collection(collection)
+                  .where('uid', whereIn: chunk)
+                  .orderBy('createdAt', descending: true)
+                  .limit(20)
+                  .get(),
+            ),
+          );
+        }
+      }
+    }
+
+    if (batches.isEmpty) return const [];
+
+    final snaps = await Future.wait(batches.map((b) => b.future));
+    final dedup = <String, _HomeFeedPost>{};
+    for (var i = 0; i < snaps.length; i++) {
+      final snap = snaps[i];
+      final collection = batches[i].collection;
+      for (final doc in snap.docs) {
+        final id = doc.id;
+        final key = '${collection}_$id';
+        final data = doc.data() as Map<String, dynamic>? ?? const {};
+        dedup[key] = _HomeFeedPost(
+          id: id,
+          collection: collection,
+          data: data,
+        );
+      }
+    }
+
+    final posts = dedup.values.toList()
+      ..sort((a, b) {
+        final aTs = a.data['createdAt'] as Timestamp?;
+        final bTs = b.data['createdAt'] as Timestamp?;
+        if (aTs == null && bTs == null) return 0;
+        if (aTs == null) return 1;
+        if (bTs == null) return -1;
+        return bTs.compareTo(aTs);
+      });
+    return _mixHomeFeed(posts, limit: 30);
+  }
+
+  List<_HomeFeedPost> _mixHomeFeed(
+    List<_HomeFeedPost> sortedRecentFirst, {
+    required int limit,
+  }) {
+    if (sortedRecentFirst.isEmpty) return const [];
+
+    final maxItems = math.min(limit, sortedRecentFirst.length);
+    final recentWindow = math.min(12, sortedRecentFirst.length);
+    final recentPool = sortedRecentFirst.take(recentWindow).toList();
+    final olderPool = sortedRecentFirst.skip(recentWindow).toList()..shuffle();
+
+    final recentTarget = math.min((maxItems * 0.7).round(), recentPool.length);
+    final olderTarget = math.min(maxItems - recentTarget, olderPool.length);
+
+    final recent = recentPool.take(recentTarget).toList();
+    final older = olderPool.take(olderTarget).toList();
+
+    final mixed = <_HomeFeedPost>[];
+    var recentIndex = 0;
+    var olderIndex = 0;
+
+    while (mixed.length < maxItems &&
+        (recentIndex < recent.length || olderIndex < older.length)) {
+      var recentBurst = 0;
+      while (recentBurst < 3 &&
+          recentIndex < recent.length &&
+          mixed.length < maxItems) {
+        mixed.add(recent[recentIndex++]);
+        recentBurst++;
+      }
+      if (olderIndex < older.length && mixed.length < maxItems) {
+        mixed.add(older[olderIndex++]);
+      }
+      if (recentIndex >= recent.length && olderIndex < older.length) {
+        mixed.add(older[olderIndex++]);
+      }
+    }
+
+    if (mixed.length < maxItems && recentIndex < recentPool.length) {
+      for (var i = recentIndex; i < recentPool.length && mixed.length < maxItems; i++) {
+        mixed.add(recentPool[i]);
+      }
+    }
+    if (mixed.length < maxItems && olderIndex < olderPool.length) {
+      for (var i = olderIndex; i < olderPool.length && mixed.length < maxItems; i++) {
+        mixed.add(olderPool[i]);
+      }
+    }
+
+    return mixed;
+  }
+
+  Widget _homeFeedSkeleton(ThemeData theme) {
+    return Shimmer.fromColors(
+      baseColor: theme.colorScheme.surfaceContainerHighest.withOpacity(0.7),
+      highlightColor: theme.colorScheme.surface.withOpacity(0.95),
+      child: ListView.separated(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: 4,
+        separatorBuilder: (_, _) => const SizedBox(height: 10),
+        itemBuilder: (_, _) => Container(
+          height: 88,
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _personalizedFeedSection(ThemeData theme) {
+    return FutureBuilder<List<_HomeFeedPost>>(
+      future: _homeFeedFuture,
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: _homeFeedSkeleton(theme),
+          );
+        }
+
+        final posts = snap.data ?? const <_HomeFeedPost>[];
+        if (posts.isEmpty) {
+          return Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: theme.colorScheme.outline.withOpacity(0.18),
+              ),
+            ),
+            child: Text(
+              'No posts found for your categories/following yet.',
+              style: TextStyle(
+                color: theme.colorScheme.onSurface.withOpacity(0.7),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          );
+        }
+
+        return ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: posts.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 10),
+          itemBuilder: (context, index) {
+            final post = posts[index];
+            final docRef = FirebaseFirestore.instance
+                .collection(post.collection)
+                .doc(post.id);
+            return StreamBuilder<DocumentSnapshot>(
+              stream: docRef.snapshots(),
+              builder: (context, liveSnap) {
+                final liveData =
+                    (liveSnap.data?.data() as Map<String, dynamic>?) ??
+                    post.data;
+                return FeedCard(data: liveData, id: post.id);
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
 }
 
 class _HomeSubjectCard extends StatelessWidget {
@@ -637,6 +879,28 @@ class _HomeSubjectCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _HomeFeedPost {
+  final String id;
+  final String collection;
+  final Map<String, dynamic> data;
+
+  const _HomeFeedPost({
+    required this.id,
+    required this.collection,
+    required this.data,
+  });
+}
+
+class _HomeQueryBatch {
+  final String collection;
+  final Future<QuerySnapshot> future;
+
+  const _HomeQueryBatch({
+    required this.collection,
+    required this.future,
+  });
 }
 
 class _HeroCardData {
