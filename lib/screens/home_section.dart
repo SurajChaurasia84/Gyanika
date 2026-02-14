@@ -46,6 +46,7 @@ class _HomeSectionState extends State<HomeSection>
   StreamSubscription<DocumentSnapshot>? _userSub;
   String _streamText = 'Select Stream';
   String _profileLetter = '?';
+  bool _forYouOnlyFollowing = false;
   final PageController _heroCardsController = PageController(
     viewportFraction: 0.9,
     initialPage: 1000,
@@ -84,7 +85,9 @@ class _HomeSectionState extends State<HomeSection>
           _heroCardsController.initialPage % _heroCards.length;
     }
     _settingsBox = Hive.box('settings');
-    _homeFeedFuture = _fetchPersonalizedHomeFeed();
+    _homeFeedFuture = _fetchPersonalizedHomeFeed(
+      onlyFollowing: _forYouOnlyFollowing,
+    );
     final cached = _settingsBox.get('preference_stream');
     if (cached is String && cached.trim().isNotEmpty) {
       _streamText = cached;
@@ -390,7 +393,23 @@ class _HomeSectionState extends State<HomeSection>
                 },
               ),
               const SizedBox(height: 10),
-              _sectionTitle('For You', theme),
+              Row(
+                children: [
+                  _sectionTitle('For You', theme),
+                  const Spacer(),
+                  _forYouFilterChip(
+                    label: 'All',
+                    selected: !_forYouOnlyFollowing,
+                    onTap: () => _setForYouFilter(false),
+                  ),
+                  const SizedBox(width: 6),
+                  _forYouFilterChip(
+                    label: 'Following',
+                    selected: _forYouOnlyFollowing,
+                    onTap: () => _setForYouFilter(true),
+                  ),
+                ],
+              ),
               const SizedBox(height: 10),
               _personalizedFeedSection(theme),
             ],
@@ -401,11 +420,58 @@ class _HomeSectionState extends State<HomeSection>
   }
 
   Future<void> _refreshHomeSection() async {
-    final future = _fetchPersonalizedHomeFeed();
+    final future = _fetchPersonalizedHomeFeed(
+      onlyFollowing: _forYouOnlyFollowing,
+    );
     if (mounted) {
       setState(() => _homeFeedFuture = future);
     }
     await future;
+  }
+
+  void _setForYouFilter(bool onlyFollowing) {
+    if (_forYouOnlyFollowing == onlyFollowing) return;
+    setState(() {
+      _forYouOnlyFollowing = onlyFollowing;
+      _homeFeedFuture = _fetchPersonalizedHomeFeed(
+        onlyFollowing: _forYouOnlyFollowing,
+      );
+    });
+  }
+
+  Widget _forYouFilterChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: selected
+              ? Theme.of(context).colorScheme.primary.withOpacity(0.14)
+              : Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected
+                ? Theme.of(context).colorScheme.primary.withOpacity(0.35)
+                : Theme.of(context).colorScheme.outline.withOpacity(0.2),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: selected
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).colorScheme.onSurface.withOpacity(0.72),
+          ),
+        ),
+      ),
+    );
   }
 
   void _startHeroCardsAutoLoop() {
@@ -565,7 +631,9 @@ class _HomeSectionState extends State<HomeSection>
     return chunks;
   }
 
-  Future<List<_HomeFeedPost>> _fetchPersonalizedHomeFeed() async {
+  Future<List<_HomeFeedPost>> _fetchPersonalizedHomeFeed({
+    required bool onlyFollowing,
+  }) async {
     final userSnap = await FirebaseFirestore.instance
         .collection('users')
         .doc(uid)
@@ -596,7 +664,7 @@ class _HomeSectionState extends State<HomeSection>
     const collections = ['questions', 'polls', 'quizzes'];
 
     for (final collection in collections) {
-      if (categories.isNotEmpty) {
+      if (!onlyFollowing && categories.isNotEmpty) {
         final categoryBatch = categories.take(10).toList();
         batches.add(
           _HomeQueryBatch(
