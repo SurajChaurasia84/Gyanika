@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -18,6 +19,33 @@ class _LoginScreenState extends State<LoginScreen> {
   final password = TextEditingController();
   bool loading = false;
   bool isPasswordVisible = false;
+  bool _sendingReset = false;
+  DateTime? _lastResetSentAt;
+  Timer? _cooldownTimer;
+  static const Duration _resetCooldown = Duration(seconds: 60);
+
+  int get _cooldownLeftSeconds {
+    if (_lastResetSentAt == null) return 0;
+    final endsAt = _lastResetSentAt!.add(_resetCooldown);
+    final remaining = endsAt.difference(DateTime.now()).inSeconds;
+    return remaining > 0 ? remaining : 0;
+  }
+
+  bool get _canSendReset => !_sendingReset && _cooldownLeftSeconds == 0;
+
+  void _startCooldownTicker() {
+    _cooldownTimer?.cancel();
+    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_cooldownLeftSeconds == 0) {
+        timer.cancel();
+      }
+      setState(() {});
+    });
+  }
 
   Future login() async {
     if (email.text.isEmpty || password.text.isEmpty) {
@@ -63,6 +91,16 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _forgotPassword() async {
+    if (!_canSendReset) {
+      final left = _cooldownLeftSeconds;
+      if (left > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Please wait ${left}s before requesting again')),
+        );
+      }
+      return;
+    }
+
     final mail = email.text.trim();
     if (mail.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -72,6 +110,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     try {
+      setState(() => _sendingReset = true);
       if (!mounted) return;
       final shouldSend = await showDialog<bool>(
         context: context,
@@ -94,22 +133,30 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (shouldSend != true) {
+        if (mounted) setState(() => _sendingReset = false);
         return;
       }
 
       await FirebaseAuth.instance.sendPasswordResetEmail(email: mail);
       if (!mounted) return;
+      setState(() {
+        _sendingReset = false;
+        _lastResetSentAt = DateTime.now();
+      });
+      _startCooldownTicker();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Password reset link sent to your email')),
       );
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
+      setState(() => _sendingReset = false);
       final message = e.code == 'invalid-email'
           ? 'Please enter a valid email'
           : 'Unable to send reset email right now';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     } catch (_) {
       if (!mounted) return;
+      setState(() => _sendingReset = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Unable to process request right now')),
       );
@@ -118,6 +165,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
+    _cooldownTimer?.cancel();
     email.dispose();
     password.dispose();
     super.dispose();
@@ -242,9 +290,14 @@ class _LoginScreenState extends State<LoginScreen> {
                       Align(
                         alignment: Alignment.centerRight,
                         child: TextButton(
-                          onPressed: loading ? null : _forgotPassword,
+                          onPressed: (loading || !_canSendReset)
+                              ? null
+                              : _forgotPassword,
                           style: TextButton.styleFrom(
-                            foregroundColor: Colors.white.withOpacity(0.92),
+                            foregroundColor: Colors.white.withOpacity(
+                              _canSendReset ? 0.92 : 0.55,
+                            ),
+                            disabledForegroundColor: Colors.white.withOpacity(0.55),
                             padding: const EdgeInsets.symmetric(
                               horizontal: 4,
                               vertical: 2,
@@ -252,9 +305,13 @@ class _LoginScreenState extends State<LoginScreen> {
                             minimumSize: Size.zero,
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
-                          child: const Text(
-                            'Forgot password?',
-                            style: TextStyle(fontWeight: FontWeight.w500),
+                          child: Text(
+                            _sendingReset
+                                ? 'Sending...'
+                                : _cooldownLeftSeconds > 0
+                                ? 'Forgot password? (${_cooldownLeftSeconds}s)'
+                                : 'Forgot password?',
+                            style: const TextStyle(fontWeight: FontWeight.w500),
                           ),
                         ),
                       ),
