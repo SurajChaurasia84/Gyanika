@@ -2084,22 +2084,24 @@ class _EditPostDialog extends StatefulWidget {
 
 class _EditPostDialogState extends State<_EditPostDialog> {
   final TextEditingController _contentCtrl = TextEditingController();
-  final TextEditingController _categoryCtrl = TextEditingController();
+  String? _selectedCategory;
+  bool _initialized = false;
   bool _saving = false;
 
   @override
   void dispose() {
     _contentCtrl.dispose();
-    _categoryCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
     if (_saving) return;
+    final category = (_selectedCategory ?? '').trim();
+    if (category.isEmpty) return;
     setState(() => _saving = true);
     await widget.postRef.set({
       'content': _contentCtrl.text.trim(),
-      'category': _categoryCtrl.text.trim(),
+      'category': category,
     }, SetOptions(merge: true));
     if (!mounted) return;
     Navigator.pop(context);
@@ -2119,8 +2121,17 @@ class _EditPostDialogState extends State<_EditPostDialog> {
           );
         }
         final data = snap.data!.data() as Map<String, dynamic>;
-        _contentCtrl.text = (data['content'] ?? '').toString();
-        _categoryCtrl.text = (data['category'] ?? '').toString();
+        if (!_initialized) {
+          _contentCtrl.text = (data['content'] ?? '').toString();
+          _selectedCategory = (data['category'] ?? '').toString().trim();
+          _initialized = true;
+        }
+        final dropdownItems = <String>[
+          ...kCategories,
+          if ((_selectedCategory ?? '').isNotEmpty &&
+              !kCategories.contains(_selectedCategory))
+            _selectedCategory!,
+        ];
 
         return AlertDialog(
           title: const Text('Edit Post'),
@@ -2134,8 +2145,23 @@ class _EditPostDialogState extends State<_EditPostDialog> {
                 maxLines: 3,
               ),
               const SizedBox(height: 8),
-              TextField(
-                controller: _categoryCtrl,
+              DropdownButtonFormField<String>(
+                value: (_selectedCategory ?? '').isEmpty
+                    ? null
+                    : _selectedCategory,
+                items: dropdownItems
+                    .map(
+                      (e) => DropdownMenuItem<String>(
+                        value: e,
+                        child: Text(e),
+                      ),
+                    )
+                    .toList(),
+                onChanged: _saving
+                    ? null
+                    : (v) {
+                        setState(() => _selectedCategory = v);
+                      },
                 decoration: const InputDecoration(labelText: 'Category'),
               ),
             ],
