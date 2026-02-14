@@ -1515,11 +1515,45 @@ class PostDetailScreen extends StatelessWidget {
                 },
                 itemBuilder: (_) => isOwner
                     ? const [
-                        PopupMenuItem(value: 'edit', child: Text('Edit')),
-                        PopupMenuItem(value: 'delete', child: Text('Delete')),
+                        PopupMenuItem(
+                          value: 'edit',
+                          child: Row(
+                            children: [
+                              Icon(Icons.edit_outlined, size: 18),
+                              SizedBox(width: 8),
+                              Text('Edit'),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.delete_outline,
+                                size: 18,
+                                color: Colors.red,
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                'Delete',
+                                style: TextStyle(color: Colors.red),
+                              ),
+                            ],
+                          ),
+                        ),
                       ]
                     : const [
-                        PopupMenuItem(value: 'report', child: Text('Report')),
+                        PopupMenuItem(
+                          value: 'report',
+                          child: Row(
+                            children: [
+                              Icon(Icons.flag_outlined, size: 18),
+                              SizedBox(width: 8),
+                              Text('Report'),
+                            ],
+                          ),
+                        ),
                       ],
               );
             },
