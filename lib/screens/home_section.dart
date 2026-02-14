@@ -342,7 +342,7 @@ class _HomeSectionState extends State<HomeSection>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _heroCardsSlider(theme),
-              const SizedBox(height: 14),
+              const SizedBox(height: 10),
               StreamBuilder<DocumentSnapshot>(
                 stream: FirebaseFirestore.instance
                     .collection('users')
@@ -383,13 +383,13 @@ class _HomeSectionState extends State<HomeSection>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _sectionTitle(title, theme),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 10),
                       _horizontalCards(theme, prefSubjects, prefStream),
                     ],
                   );
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 10),
               _sectionTitle('For You', theme),
               const SizedBox(height: 10),
               _personalizedFeedSection(theme),
@@ -830,7 +830,7 @@ class _HomeSectionState extends State<HomeSection>
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: posts.length,
-          separatorBuilder: (_, _) => const SizedBox(height: 10),
+          separatorBuilder: (_, _) => const SizedBox(height: 0),
           itemBuilder: (context, index) {
             final post = posts[index];
             final docRef = FirebaseFirestore.instance
