@@ -2097,7 +2097,10 @@ String _timeAgo(Timestamp t) {
   if (d.inMinutes < 1) return 'just now';
   if (d.inMinutes < 60) return '${d.inMinutes}m ago';
   if (d.inHours < 24) return '${d.inHours}h ago';
-  return '${d.inDays}d ago';
+  if (d.inDays < 7) return '${d.inDays}d ago';
+  if (d.inDays < 30) return '${d.inDays ~/ 7}w ago';
+  if (d.inDays < 365) return '${d.inDays ~/ 30}mo ago';
+  return '${d.inDays ~/ 365}y ago';
 }
 
 String _timeLabel(Timestamp? t) {
