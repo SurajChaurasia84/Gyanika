@@ -23,12 +23,14 @@ class _SelectCategoryScreenState extends State<SelectCategoryScreen> {
     'Mathematics',
     'Science',
     'Technology',
-    'General Knowledge',
     'Computer',
     'Engineering',
     'Environment',
+    'Moral',
+    'General Knowledge',
     'Social Science',
     'Logical Reasoning',
+    'Law',
     'Other',
   ];
 
