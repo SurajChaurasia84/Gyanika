@@ -671,7 +671,7 @@ class _HomeSectionState extends State<HomeSection>
             collection: collection,
             future: FirebaseFirestore.instance
                 .collection(collection)
-                .where('categories', whereIn: categoryBatch)
+                .where('category', whereIn: categoryBatch)
                 .orderBy('createdAt', descending: true)
                 .limit(20)
                 .get(),
@@ -2607,8 +2607,9 @@ class _MockTestScreenState extends State<MockTestScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: const Color(0xFF0C1020),
+      backgroundColor: theme.colorScheme.surface,
       body: FutureBuilder<void>(
         future: _initFuture,
         builder: (context, snapshot) {
@@ -2616,8 +2617,13 @@ class _MockTestScreenState extends State<MockTestScreen> {
             return const _DailyPracticeSkeleton();
           }
           if (_questions.isEmpty) {
-            return const Center(
-              child: Text('No mock tests available right now.'),
+            return Center(
+              child: Text(
+                'No mock tests available right now.',
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
             );
           }
 
