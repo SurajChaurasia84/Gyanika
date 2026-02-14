@@ -1259,6 +1259,195 @@ class PostDetailScreen extends StatelessWidget {
     required this.type,
   });
 
+  static const List<String> _reportReasons = [
+    'Abusive content',
+    'Harassment',
+    'Sexual content',
+    'Hate speech',
+    'Violence or threat',
+    'Spam or scam',
+    'Misinformation',
+    'Impersonation',
+    'Misleading',
+    'Self-harm content',
+    'Not mentioned',
+    'Other',
+  ];
+
+  Future<void> _showReportReasonPicker(
+    BuildContext context, {
+    required String ownerUid,
+    required Map<String, dynamic> postData,
+  }) async {
+    final myUid = FirebaseAuth.instance.currentUser?.uid;
+    if (myUid == null || myUid == ownerUid) return;
+
+    final reason = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        String? selectedReason;
+        return SafeArea(
+          child: StatefulBuilder(
+            builder: (context, setModalState) {
+              final canSubmit = (selectedReason ?? '').trim().isNotEmpty;
+              final textColor =
+                  Theme.of(context).colorScheme.onSurface.withOpacity(0.74);
+
+              return DraggableScrollableSheet(
+                expand: false,
+                initialChildSize: 0.5,
+                minChildSize: 0.35,
+                maxChildSize: 0.9,
+                builder: (context, scrollController) {
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            const Text(
+                              'Report post',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const Spacer(),
+                            TextButton(
+                              onPressed: canSubmit
+                                  ? () async {
+                                      final ok = await showDialog<bool>(
+                                        context: context,
+                                        builder: (dialogContext) => AlertDialog(
+                                          title: const Text('Submit report?'),
+                                          content: const Text(
+                                            'Are you sure you want to submit this report?',
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(
+                                                dialogContext,
+                                                false,
+                                              ),
+                                              child: const Text('Cancel'),
+                                            ),
+                                            FilledButton(
+                                              onPressed: () => Navigator.pop(
+                                                dialogContext,
+                                                true,
+                                              ),
+                                              child: const Text('Submit'),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                      if (ok == true && context.mounted) {
+                                        Navigator.pop(context, selectedReason);
+                                      }
+                                    }
+                                  : null,
+                              child: Text(
+                                'Submit',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: canSubmit
+                                      ? null
+                                      : Theme.of(context)
+                                          .colorScheme
+                                          .onSurface
+                                          .withOpacity(0.35),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Expanded(
+                          child: ListView.separated(
+                            controller: scrollController,
+                            itemCount: _reportReasons.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 2),
+                            itemBuilder: (context, i) {
+                              final reason = _reportReasons[i];
+                              final selected = selectedReason == reason;
+                              return InkWell(
+                                borderRadius: BorderRadius.circular(10),
+                                onTap: () {
+                                  setModalState(() => selectedReason = reason);
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 8,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          reason,
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: textColor,
+                                            fontWeight: selected
+                                                ? FontWeight.w600
+                                                : FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                      if (selected)
+                                        Icon(
+                                          Icons.check_circle,
+                                          size: 18,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .primary,
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        );
+      },
+    );
+
+    if (reason == null || reason.trim().isEmpty) return;
+
+    final reportDocId = '${myUid}_${collection}_$postId';
+    final content = (postData['content'] ?? '').toString();
+    final category = (postData['category'] ?? '').toString();
+    await FirebaseFirestore.instance.collection('reports').doc(reportDocId).set({
+      'reporterUid': myUid,
+      'reportedUid': ownerUid,
+      'postId': postId,
+      'collection': collection,
+      'postType': type,
+      'reason': reason,
+      'content': content,
+      'category': category,
+      'status': 'pending',
+      'updatedAt': FieldValue.serverTimestamp(),
+      'createdAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Report submitted')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final postRef = FirebaseFirestore.instance
@@ -1278,7 +1467,6 @@ class PostDetailScreen extends StatelessWidget {
               final data = snap.data?.data() as Map<String, dynamic>?;
               final ownerUid = (data?['uid'] ?? '').toString();
               final isOwner = ownerUid == myUid;
-              if (!isOwner) return const SizedBox.shrink();
               return PopupMenuButton<String>(
                 icon: const Icon(Icons.more_vert),
                 onSelected: (value) async {
@@ -1317,11 +1505,22 @@ class PostDetailScreen extends StatelessWidget {
                     if (!context.mounted) return;
                     Navigator.pop(context);
                   }
+                  if (value == 'report') {
+                    await _showReportReasonPicker(
+                      context,
+                      ownerUid: ownerUid,
+                      postData: data ?? const <String, dynamic>{},
+                    );
+                  }
                 },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'edit', child: Text('Edit')),
-                  PopupMenuItem(value: 'delete', child: Text('Delete')),
-                ],
+                itemBuilder: (_) => isOwner
+                    ? const [
+                        PopupMenuItem(value: 'edit', child: Text('Edit')),
+                        PopupMenuItem(value: 'delete', child: Text('Delete')),
+                      ]
+                    : const [
+                        PopupMenuItem(value: 'report', child: Text('Report')),
+                      ],
               );
             },
           ),
