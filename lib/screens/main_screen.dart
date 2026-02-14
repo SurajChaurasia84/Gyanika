@@ -45,7 +45,10 @@ class _MainScreenState extends State<MainScreen> {
       ),
       child: Scaffold(
         backgroundColor: colorScheme.surface,
-        body: _screens[_currentIndex],
+        body: IndexedStack(
+          index: _currentIndex,
+          children: _screens,
+        ),
 
         bottomNavigationBar: BottomNavigationBar(
           backgroundColor: colorScheme.surface,
