@@ -204,6 +204,51 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
               ),
+              Positioned(
+                top: 120,
+                left: -30,
+                child: ImageFiltered(
+                  imageFilter: ImageFilter.blur(sigmaX: 26, sigmaY: 26),
+                  child: Container(
+                    width: 90,
+                    height: 90,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.08),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 300,
+                right: 24,
+                child: ImageFiltered(
+                  imageFilter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                  child: Container(
+                    width: 58,
+                    height: 58,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.10),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                bottom: 140,
+                left: 36,
+                child: ImageFiltered(
+                  imageFilter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+                  child: Container(
+                    width: 74,
+                    height: 74,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.07),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ),
               SafeArea(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(20),
