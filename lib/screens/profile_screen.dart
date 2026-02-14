@@ -1469,6 +1469,8 @@ class PostDetailScreen extends StatelessWidget {
               final isOwner = ownerUid == myUid;
               return PopupMenuButton<String>(
                 icon: const Icon(Icons.more_vert),
+                position: PopupMenuPosition.under,
+                offset: const Offset(0, 4),
                 onSelected: (value) async {
                   if (value == 'edit') {
                     showDialog(
