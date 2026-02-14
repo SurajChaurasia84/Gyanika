@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'abcd.dart';
 import 'subject_screen.dart';
 
 class ExploreSection extends StatefulWidget {
@@ -116,8 +117,7 @@ class _ExploreSectionState extends State<ExploreSection> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) =>
-                  const SubjectScreen(subjectName: 'ABCD', stream: 'ABCD'),
+              builder: (_) => const AbcdScreen(),
             ),
           );
         },
