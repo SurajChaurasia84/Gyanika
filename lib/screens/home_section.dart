@@ -38,7 +38,8 @@ class HomeSection extends StatefulWidget {
   State<HomeSection> createState() => _HomeSectionState();
 }
 
-class _HomeSectionState extends State<HomeSection> {
+class _HomeSectionState extends State<HomeSection>
+    with AutomaticKeepAliveClientMixin<HomeSection> {
   final String uid = FirebaseAuth.instance.currentUser!.uid;
   late final Box _settingsBox;
   late Future<List<_HomeFeedPost>> _homeFeedFuture;
@@ -137,6 +138,7 @@ class _HomeSectionState extends State<HomeSection> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -787,6 +789,9 @@ class _HomeSectionState extends State<HomeSection> {
       ),
     );
   }
+
+  @override
+  bool get wantKeepAlive => true;
 
   Widget _personalizedFeedSection(ThemeData theme) {
     return FutureBuilder<List<_HomeFeedPost>>(
