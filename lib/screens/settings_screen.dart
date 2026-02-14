@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'auth/login_screen.dart';
 import 'auth/select_category_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -43,7 +44,10 @@ class SettingsScreen extends StatelessWidget {
     if (result == true) {
       await FirebaseAuth.instance.signOut();
       if (!context.mounted) return;
-      Navigator.popUntil(context, (route) => route.isFirst);
+      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
     }
   }
 
