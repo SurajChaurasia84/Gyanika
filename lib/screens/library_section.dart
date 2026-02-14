@@ -34,7 +34,8 @@ class LibrarySection extends StatefulWidget {
   State<LibrarySection> createState() => _LibrarySectionState();
 }
 
-class _LibrarySectionState extends State<LibrarySection> {
+class _LibrarySectionState extends State<LibrarySection>
+    with AutomaticKeepAliveClientMixin<LibrarySection> {
   String _filter = 'All';
   bool _showChips = true;
   bool _isSearching = false;
@@ -69,6 +70,7 @@ class _LibrarySectionState extends State<LibrarySection> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       appBar: AppBar(
         elevation: 0,
@@ -151,6 +153,9 @@ class _LibrarySectionState extends State<LibrarySection> {
       ),
     );
   }
+
+  @override
+  bool get wantKeepAlive => true;
 
   void _onScroll() {
     if (!_scrollCtrl.hasClients) {
