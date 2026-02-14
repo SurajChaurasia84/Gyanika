@@ -1,5 +1,4 @@
 import 'dart:ui';
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
@@ -60,6 +59,60 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (mounted) {
       setState(() => loading = false);
+    }
+  }
+
+  Future<void> _forgotPassword() async {
+    final mail = email.text.trim();
+    if (mail.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your email first')),
+      );
+      return;
+    }
+
+    try {
+      if (!mounted) return;
+      final shouldSend = await showDialog<bool>(
+        context: context,
+        builder: (ctx) {
+          return AlertDialog(
+            title: const Text('Confirm reset'),
+            content: Text('Send password reset link to\n$mail ?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Send link'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (shouldSend != true) {
+        return;
+      }
+
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: mail);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password reset link sent to your email')),
+      );
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      final message = e.code == 'invalid-email'
+          ? 'Please enter a valid email'
+          : 'Unable to send reset email right now';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to process request right now')),
+      );
     }
   }
 
@@ -185,7 +238,27 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: loading ? null : _forgotPassword,
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.white.withOpacity(0.92),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 2,
+                            ),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text(
+                            'Forgot password?',
+                            style: TextStyle(fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
                       SizedBox(
                         width: double.infinity,
                         height: 54,
@@ -256,7 +329,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               'Sign Up',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                                color: Colors.indigo,
                               ),
                             ),
                           ),
