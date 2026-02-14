@@ -116,7 +116,7 @@ class _LoginScreenState extends State<LoginScreen> {
         context: context,
         builder: (ctx) {
           return AlertDialog(
-            title: const Text('Confirm reset'),
+            title: const Text('Confirm email'),
             content: Text('Send password reset link to\n$mail ?'),
             actions: [
               TextButton(
