@@ -45,7 +45,7 @@ dependencies:
   cloud_firestore: ^6.1.2
   google_sign_in: ^7.2.0
   audioplayers: ^6.5.1
-  vibration: ^3.1.5
+  vibration: ^3.1.6
   shimmer: ^3.0.0
 
 dev_dependencies:
@@ -77,8 +77,6 @@ flutter:
     - assets/src/physics.png
     - assets/src/maths.png
     - assets/src/function.png
-    - assets/src/123.png
-    - assets/src/alphabet.png
     - assets/src/biology.png
     - assets/src/botany.png
     - assets/src/chemistry.png
@@ -89,7 +87,6 @@ flutter:
     - assets/src/gk.png
     - assets/src/hindi.png
     - assets/src/me.png
-    - assets/src/moral.png
     - assets/src/science.png
     - assets/src/electrical.png
     - assets/src/certificate.png
@@ -123,8 +120,6 @@ flutter:
     - assets/src/X.png
     - assets/src/Y.png
     - assets/src/Z.png
-    - assets/src/start.png
-    - assets/src/finish.png
     - assets/bgs/ian.mp3
 
   # To add assets to your application, add an assets section, like this:
