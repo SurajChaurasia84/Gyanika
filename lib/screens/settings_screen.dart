@@ -1,9 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'auth/select_category_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
+
+  Future<void> _openCategoryUpdate(BuildContext context) async {
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const SelectCategoryScreen(isUpdateMode: true),
+      ),
+    );
+
+    if (changed == true && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Categories updated')),
+      );
+    }
+  }
 
   Future<void> _confirmLogout(BuildContext context) async {
     final result = await showDialog<bool>(
@@ -147,6 +163,17 @@ class SettingsScreen extends StatelessWidget {
             icon: Icons.verified_user_outlined,
             title: 'Email Verified',
             subtitle: user.emailVerified ? 'Yes' : 'No',
+          ),
+
+          const SizedBox(height: 24),
+
+          _sectionTitle('Category'),
+
+          _settingTile(
+            icon: Icons.category_outlined,
+            title: 'Update Category',
+            subtitle: 'Update your selected categories',
+            onTap: () => _openCategoryUpdate(context),
           ),
 
           const SizedBox(height: 24),
