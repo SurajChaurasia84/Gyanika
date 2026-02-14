@@ -13,10 +13,10 @@ import 'package:hive/hive.dart';
 import 'notification_screen.dart';
 import 'my_profile_screen.dart';
 import 'course_detail_screen.dart';
-import 'explore_section.dart';
+import 'library_section.dart';
 import 'subject_screen.dart';
 import 'profile_screen.dart';
-import 'library_section.dart';
+import 'explore_section.dart';
 import 'preference_screen.dart';
 
 Future<String> _dailyCurrentUserLabel() async {

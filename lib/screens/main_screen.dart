@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:gyanika/screens/profile_screen.dart';
 import 'package:iconsax/iconsax.dart';
 
 import 'home_section.dart';
-import 'explore_section.dart';
 import 'library_section.dart';
+import 'explore_section.dart';
+import 'profile_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -19,8 +19,8 @@ class _MainScreenState extends State<MainScreen> {
 
   final List<Widget> _screens = const [
     HomeSection(),
-    ExploreSection(),
     LibrarySection(),
+    ExploreSection(),
     ProfileScreen(),
   ];
 
