@@ -8,6 +8,7 @@ import 'screens/main_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/email_verification_screen.dart';
 import 'helpers/in_app_notification_service.dart';
+import 'helpers/widget_navigation_service.dart';
 
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.system);
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
@@ -43,17 +44,14 @@ class _AppFadePageTransitionsBuilder extends PageTransitionsBuilder {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 🔥 Firebase initialize
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // 🧠 Hive initialize
   await Hive.initFlutter();
   await Hive.openBox('messages');
   final settingsBox = await Hive.openBox('settings');
 
-  // 🎨 Load saved theme (persisted locally)
   final followSystem =
       settingsBox.get('theme_follow_system', defaultValue: true) as bool;
   final savedTheme = settingsBox.get('theme_mode', defaultValue: 'system');
@@ -67,7 +65,8 @@ void main() async {
     };
   }
 
-  // 🔒 Edge-to-edge
+  await WidgetNavigationService.init();
+
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
   runApp(const GyanikaApp());
@@ -80,14 +79,12 @@ class GyanikaApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: themeNotifier,
-      builder: (_, themeMode, __) {
+      builder: (_, themeMode, _) {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           title: 'Gyanika',
           themeMode: themeMode,
           navigatorKey: appNavigatorKey,
-
-          // ☀️ LIGHT
           theme: ThemeData(
             useMaterial3: true,
             brightness: Brightness.light,
@@ -98,8 +95,6 @@ class GyanikaApp extends StatelessWidget {
             ),
             pageTransitionsTheme: _appPageTransitionsTheme,
           ),
-
-          // 🌙 DARK
           darkTheme: ThemeData(
             useMaterial3: true,
             brightness: Brightness.dark,
@@ -110,7 +105,6 @@ class GyanikaApp extends StatelessWidget {
             ),
             pageTransitionsTheme: _appPageTransitionsTheme,
           ),
-
           home: const AuthGate(),
         );
       },
@@ -118,7 +112,6 @@ class GyanikaApp extends StatelessWidget {
   }
 }
 
-/// 🔐 AUTH GATE
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
 
@@ -127,7 +120,6 @@ class AuthGate extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        // ⏳ Loading
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
@@ -138,14 +130,11 @@ class AuthGate extends StatelessWidget {
 
         if (user == null) {
           InAppNotificationService.dispose();
-          // ❌ Not logged in → Login Screen
           return const LoginScreen();
         } else if (!user.emailVerified) {
           InAppNotificationService.dispose();
-          // ⚠️ Logged in but email not verified → Email Verification Screen
           return EmailVerificationScreen(user: user);
         } else {
-          // ✅ Logged in & email verified → MainScreen
           Future.microtask(() {
             InAppNotificationService.init(
               navigatorKey: appNavigatorKey,
