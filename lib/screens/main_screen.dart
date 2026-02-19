@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:iconsax/iconsax.dart';
 
+import '../helpers/widget_navigation_service.dart';
 import 'home_section.dart';
 import 'library_section.dart';
 import 'explore_section.dart';
@@ -23,6 +24,30 @@ class _MainScreenState extends State<MainScreen> {
     ExploreSection(),
     ProfileScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+
+    final initialTab = WidgetNavigationService.consumePendingTab();
+    if (initialTab != null) {
+      _currentIndex = initialTab;
+    }
+
+    WidgetNavigationService.onTabRequested = (index) {
+      if (!mounted) return;
+      if (index == _currentIndex) return;
+      setState(() => _currentIndex = index);
+    };
+  }
+
+  @override
+  void dispose() {
+    if (WidgetNavigationService.onTabRequested != null) {
+      WidgetNavigationService.onTabRequested = null;
+    }
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
