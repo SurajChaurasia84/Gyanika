@@ -117,7 +117,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                 context,
                 PageRouteBuilder(
                   transitionDuration: const Duration(milliseconds: 250),
-                  pageBuilder: (_, animation, __) => FadeTransition(
+                  pageBuilder: (_, animation, _) => FadeTransition(
                     opacity:
                         CurvedAnimation(parent: animation, curve: Curves.easeInOut),
                     child: SlideTransition(
@@ -157,7 +157,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                     context,
                     PageRouteBuilder(
                       transitionDuration: const Duration(milliseconds: 250),
-                      pageBuilder: (_, animation, __) => FadeTransition(
+                      pageBuilder: (_, animation, _) => FadeTransition(
                         opacity: CurvedAnimation(
                           parent: animation,
                           curve: Curves.easeInOut,

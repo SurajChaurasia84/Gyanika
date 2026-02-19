@@ -1368,7 +1368,7 @@ class PostDetailScreen extends StatelessWidget {
                           child: ListView.separated(
                             controller: scrollController,
                             itemCount: _reportReasons.length,
-                            separatorBuilder: (_, __) =>
+                            separatorBuilder: (_, _) =>
                                 const SizedBox(height: 2),
                             itemBuilder: (context, i) {
                               final reason = _reportReasons[i];
