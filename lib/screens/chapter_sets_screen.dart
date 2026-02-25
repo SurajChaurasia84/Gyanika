@@ -125,6 +125,7 @@ class _ChapterSetsScreenState extends State<ChapterSetsScreen> {
   ) async {
     final setData = setDoc.data();
     final setNo = _asInt(setData['setNumber']);
+    final language = (setData['language'] ?? '').toString().trim();
     final questions = await _loadQuestionsForSet(setDoc.reference);
     if (!mounted) return;
 
@@ -141,6 +142,7 @@ class _ChapterSetsScreenState extends State<ChapterSetsScreen> {
         builder: (_) => SetTestScreen(
           chapterTitle: widget.chapterTitle,
           setLabel: 'Set $setNo',
+          language: language,
           questions: questions,
         ),
       ),
@@ -156,6 +158,7 @@ class _ChapterSetsScreenState extends State<ChapterSetsScreen> {
     SetAttemptResult attempt,
   ) async {
     final setNo = _asInt(setDoc.data()['setNumber']);
+    final language = (setDoc.data()['language'] ?? '').toString().trim();
     final questions = await _loadQuestionsForSet(setDoc.reference);
     if (!mounted) return;
 
@@ -166,6 +169,7 @@ class _ChapterSetsScreenState extends State<ChapterSetsScreen> {
             builder: (_) => SetAnalyticsScreen(
               chapterTitle: widget.chapterTitle,
               setLabel: 'Set $setNo',
+              language: language,
               attempt: attempt,
               questions: questions,
               allowRetake: true,
@@ -235,16 +239,14 @@ class _ChapterSetsScreenState extends State<ChapterSetsScreen> {
               final isExpanded = _expandedSetId == setDoc.id;
               final createdText = _formatCreatedDate(setData['createdAt']);
               final qCount = _asInt(setData['questionCount']);
+              final language = (setData['language'] ?? '').toString().trim();
 
-              return Container(
+              return Card(
                 margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  children: [
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+                  child: Column(
+                    children: [
                     ListTile(
                       onTap: isAttempted
                           ? () {
@@ -266,6 +268,27 @@ class _ChapterSetsScreenState extends State<ChapterSetsScreen> {
                         style: TextStyle(
                           fontSize: 12,
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      trailing: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          language.isEmpty ? '-' : language,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(context).colorScheme.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ),
@@ -292,7 +315,8 @@ class _ChapterSetsScreenState extends State<ChapterSetsScreen> {
                           child: const Text('Start Test'),
                         ),
                       ),
-                  ],
+                    ],
+                  ),
                 ),
               );
             }).toList(),
@@ -306,12 +330,14 @@ class _ChapterSetsScreenState extends State<ChapterSetsScreen> {
 class SetTestScreen extends StatefulWidget {
   final String chapterTitle;
   final String setLabel;
+  final String language;
   final List<QuestionItem> questions;
 
   const SetTestScreen({
     super.key,
     required this.chapterTitle,
     required this.setLabel,
+    required this.language,
     required this.questions,
   });
 
@@ -379,6 +405,7 @@ class _SetTestScreenState extends State<SetTestScreen> {
             builder: (_) => SetAnalyticsScreen(
               chapterTitle: widget.chapterTitle,
               setLabel: widget.setLabel,
+              language: widget.language,
               attempt: result,
               questions: widget.questions,
               allowRetake: true,
@@ -543,6 +570,7 @@ class _SetTestScreenState extends State<SetTestScreen> {
 class SetAnalyticsScreen extends StatelessWidget {
   final String chapterTitle;
   final String setLabel;
+  final String language;
   final SetAttemptResult attempt;
   final List<QuestionItem> questions;
   final bool allowRetake;
@@ -551,6 +579,7 @@ class SetAnalyticsScreen extends StatelessWidget {
     super.key,
     required this.chapterTitle,
     required this.setLabel,
+    required this.language,
     required this.attempt,
     required this.questions,
     required this.allowRetake,
@@ -594,6 +623,20 @@ class SetAnalyticsScreen extends StatelessWidget {
               ),
               Text(
                 _formatDuration(attempt.timeTakenSeconds),
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Language',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+              Text(
+                language.trim().isEmpty ? '-' : language,
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
               ),
             ],
